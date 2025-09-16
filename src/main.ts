@@ -43,7 +43,7 @@ async function bootstrap() {
   SwaggerModule.setup('api/docs', app, document);
   const logger = app.get(LoggerService);
   app.useLogger(logger);
-  await app.listen(process.env.PORT ?? 3000);
+  await app.listen(process.env.PORT ?? 3000, '0.0.0.0');
   logger.log('Application started on http://localhost:3000');
 }
 bootstrap();

@@ -27,7 +27,12 @@ export class UsersService {
     return bcrypt.compare(plainPassword, hashedPassword);
   }
 
-  async createUser(createUserDto: CreateUserDto) {
+  async createUser(
+    p0: string,
+    p1: number,
+    p2: string,
+    createUserDto: CreateUserDto,
+  ) {
     const hashedPassword = await this.hashPassword(createUserDto.password);
 
     const userToInsert = {
