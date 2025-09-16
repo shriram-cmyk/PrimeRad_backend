@@ -6,6 +6,7 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from './logger/logger.module';
+import { FellowshipModule } from './fellowship/fellowship.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -13,6 +14,7 @@ import { LoggerModule } from './logger/logger.module';
     DbModule,
     UsersModule,
     AuthModule,
+    FellowshipModule,
   ],
   controllers: [AppController],
   providers: [AppService],

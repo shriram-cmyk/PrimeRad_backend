@@ -1,0 +1,47 @@
+import {
+  mysqlTable,
+  mysqlEnum,
+  serial,
+  varchar,
+  int,
+  text,
+  boolean,
+  timestamp,
+  primaryKey,
+  char,
+} from 'drizzle-orm/mysql-core';
+import { sql } from 'drizzle-orm';
+
+export const tblRegistration = mysqlTable('tbl_registration', {
+  regId: int('reg_id').primaryKey().autoincrement(),
+  salutation: varchar('salutation', { length: 50 }),
+  fname: varchar('fname', { length: 100 }),
+  lname: varchar('lname', { length: 100 }),
+  email: varchar('email', { length: 255 }),
+  mobile: varchar('mobile', { length: 15 }),
+  designation: varchar('designation', { length: 100 }),
+  password: varchar('password', { length: 255 }),
+  profilePicture: varchar('profile_picture', { length: 255 }),
+  mobileVerified: char('mobile_verified', { length: 1 }).default('0'),
+  emailVerified: char('email_verified', { length: 1 }).default('0'),
+  institution: varchar('institution', { length: 255 }),
+  medboard: varchar('medboard', { length: 100 }),
+  mednumber: varchar('mednumber', { length: 50 }),
+  country: varchar('country', { length: 100 }),
+  state: varchar('state', { length: 100 }),
+  city: varchar('city', { length: 100 }),
+  pincode: varchar('pincode', { length: 10 }),
+  address: text('address'),
+  gstCheck: char('gst_check', { length: 1 }).default('0'),
+  gstin: varchar('gstin', { length: 15 }),
+  gstEntityName: varchar('gst_entity_name', { length: 255 }),
+  refCode: varchar('ref_code', { length: 50 }),
+  firstRegistration: varchar('first_registration', { length: 50 }),
+  batchId: int('batch_id').default(0),
+  complete: char('complete', { length: 1 }).default('0'),
+  createdDate: timestamp('created_date').default(sql`CURRENT_TIMESTAMP`),
+  role: mysqlEnum('role', ['admin', 'faculty', 'user'])
+    .notNull()
+    .default('user'),
+  refreshToken: varchar('refresh_token', { length: 500 }).default(''),
+});

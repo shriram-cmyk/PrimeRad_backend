@@ -16,21 +16,24 @@ export class AuthService {
     this.logger.log('AuthService initialized successfully');
   }
 
-  async validateUser(username: string, password: string) {
-    this.logger.log(`Validating user: ${username}`);
-    const user = await this.usersService.findByName(username);
+  async validateUser(email: string, password: string) {
+    this.logger.log(`Validating user: ${email}`);
+    const user = await this.usersService.findByEmail(email);
+    console.log(user);
     if (user && user.password === password) {
       const { password, ...result } = user;
-      this.logger.log(`User validated successfully: ${username}`);
+      this.logger.log(`User validated successfully: ${email}`);
       return result;
     }
-    this.logger.warn(`Failed validation attempt for user: ${username}`);
+    this.logger.warn(`Failed validation attempt for user: ${email}`);
     return null;
   }
 
   async login(user: any) {
-    this.logger.log(`Generating tokens for user: ${user.name}`);
-    const payload = { username: user.name, sub: user.id, role: user.role };
+    this.logger.log(
+      `Generating tokens for user: ${user.fname + ' ' + user.lname}`,
+    );
+    const payload = { username: user.fname, sub: user.regId, role: user.role };
 
     const accessToken = jwt.sign(payload, process.env.JWT_SECRET!, {
       expiresIn: process.env.JWT_EXPIRATION || '15m',
@@ -40,14 +43,19 @@ export class AuthService {
       expiresIn: process.env.JWT_REFRESH_EXPIRATION || '7d',
     });
 
-    await this.usersService.saveRefreshToken(user.id, refreshToken);
+    await this.usersService.saveRefreshToken(user.regId, refreshToken);
 
-    this.logger.log(`User logged in successfully: ${user.name}`);
+    this.logger.log(
+      `User logged in successfully: ${user.fname + ' ' + user.lname}`,
+    );
+
     return {
       accessToken,
       refreshToken,
-      name: user.name,
+      name: user.fname + ' ' + user.lname,
+      email: user.email,
       role: user.role,
+      designation: user.designation,
     };
   }
 
@@ -63,7 +71,7 @@ export class AuthService {
     try {
       jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET!);
       const newAccessToken = jwt.sign(
-        { username: user.name, sub: user.id, role: user.role },
+        { username: user.fname, sub: user.regId, role: user.role },
         process.env.JWT_SECRET!,
         { expiresIn: process.env.JWT_EXPIRATION || '15m' },
       );
