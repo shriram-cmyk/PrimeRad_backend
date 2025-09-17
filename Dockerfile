@@ -13,4 +13,4 @@ WORKDIR /usr/src/app
 COPY package*.json ./
 RUN npm install --omit=dev
 COPY --from=build /usr/src/app/dist ./dist
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/src/main.js"]

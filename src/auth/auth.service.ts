@@ -9,6 +9,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly logger: LoggerService,
   ) {
+    console.log(process.env.JWT_SECRET);
     if (!process.env.JWT_SECRET || !process.env.JWT_REFRESH_SECRET) {
       this.logger.error('JWT secrets are missing in .env');
       throw new Error('JWT secrets are missing in .env');
