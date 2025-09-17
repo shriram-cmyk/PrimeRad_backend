@@ -1,20 +1,16 @@
-FROM node:18-slim
-
-# Create app directory
+# Stage 1: build & test
+FROM node:20-slim AS build
 WORKDIR /usr/src/app
-
-# Install dependencies
 COPY package*.json ./
-RUN npm install --omit=dev
-
-# Copy app source
+RUN npm install
 COPY . .
-
-# Build the app
+RUN npm run test
 RUN npm run build
 
-# Expose port (for local clarity, Cloud Run injects $PORT)
-EXPOSE 8080
-
-# Start the app
-CMD ["node", "dist/src/main.js"]
+# Stage 2: production image
+FROM node:20-slim
+WORKDIR /usr/src/app
+COPY package*.json ./
+RUN npm install --omit=dev
+COPY --from=build /usr/src/app/dist ./dist
+CMD ["node", "dist/main.js"]

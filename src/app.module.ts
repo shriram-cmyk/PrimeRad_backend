@@ -7,6 +7,7 @@ import { AuthModule } from './auth/auth.module';
 import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from './logger/logger.module';
 import { FellowshipModule } from './fellowship/fellowship.module';
+import { PacsAuthModule } from './pacs-dicom/pacs-dicom-auth.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -15,6 +16,7 @@ import { FellowshipModule } from './fellowship/fellowship.module';
     UsersModule,
     AuthModule,
     FellowshipModule,
+    PacsAuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
