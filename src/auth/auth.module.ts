@@ -14,7 +14,7 @@ import { DbModule } from '../db/db.module';
     PassportModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'super-secret',
-      signOptions: { expiresIn: '15m' },
+      signOptions: { expiresIn: '30m' },
     }),
   ],
   providers: [AuthService, JwtStrategy, UsersService, LocalStrategy],

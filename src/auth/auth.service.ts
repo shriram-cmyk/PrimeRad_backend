@@ -37,11 +37,11 @@ export class AuthService {
     const payload = { username: user.fname, sub: user.regId, role: user.role };
 
     const accessToken = jwt.sign(payload, process.env.JWT_SECRET!, {
-      expiresIn: process.env.JWT_EXPIRATION || '15m',
+      expiresIn: process.env.JWT_EXPIRATION ?? '15m',
     });
 
     const refreshToken = jwt.sign(payload, process.env.JWT_REFRESH_SECRET!, {
-      expiresIn: process.env.JWT_REFRESH_EXPIRATION || '7d',
+      expiresIn: process.env.JWT_REFRESH_EXPIRATION ?? '7d',
     });
 
     await this.usersService.saveRefreshToken(user.regId, refreshToken);

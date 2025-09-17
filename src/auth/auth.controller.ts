@@ -76,6 +76,7 @@ export class AuthController {
   @ApiResponse({ status: 404, description: 'Invalid username or password' })
   async login(@Body() loginDto: LoginDto, @Request() req: any) {
     console.log('inside');
+    console.log('user', req.user);
     return this.authService.login(req.user);
   }
 
