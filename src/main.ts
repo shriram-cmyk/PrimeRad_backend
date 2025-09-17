@@ -10,11 +10,12 @@ async function bootstrap() {
   });
 
   app.enableCors({
-    origin: ['http://localhost:4200'],
+    origin: ['http://localhost:4200', 'https://your-frontend-domain.com'],
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
   });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -41,10 +42,12 @@ async function bootstrap() {
 
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
+
   const logger = app.get(LoggerService);
   app.useLogger(logger);
+
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
-  logger.log('Application started on http://localhost:3000');
+  logger.log(`Application started on http://localhost:${port}`);
 }
 bootstrap();
