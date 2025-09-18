@@ -15,10 +15,11 @@ import {
   tblFacultyMap,
   tblSessionResources,
   tblSessionstatus,
+  tblDicomObservationTitles,
 } from '../db/schema';
 import { CreateQueryDto } from './dto/create-query-dto';
 import { CreateQueryResponseDto } from './dto/create-query-response-dto';
-import { and, eq, sql, gt, inArray } from 'drizzle-orm';
+import { and, eq, sql, or, gt, inArray } from 'drizzle-orm';
 
 @Injectable()
 export class FellowshipService {
@@ -43,7 +44,6 @@ export class FellowshipService {
 
       const total = countResult?.count ?? 0;
 
-      // Fetch programs grouped by batchId with ANY_VALUE
       const programs = await this.db
         .select({
           programId: sql<number>`ANY_VALUE(${tblProgram.programId})`,
@@ -52,7 +52,7 @@ export class FellowshipService {
           programUrl: sql<string>`ANY_VALUE(${tblProgram.programUrl})`,
           programTitle: sql<string>`ANY_VALUE(${tblProgram.programTitle})`,
           programDescription: sql<string>`ANY_VALUE(${tblProgram.programDescription})`,
-          programImage: sql<string>`ANY_VALUE(${tblProgram.programImage})`,
+          programImage: sql<string>`ANY_VALUE(CONCAT('https://primeradacademy.com/admin/support/uploads/banners/', ${tblProgram.programImage}))`,
           programDuration: sql<number>`ANY_VALUE(${tblProgram.programDuration})`,
 
           batchId: tblBatch.batchId,
@@ -691,5 +691,74 @@ export class FellowshipService {
       console.error('Error updating session status:', error);
       throw error;
     }
+  }
+
+  async getObservationTitlesBySession(sessionId: number) {
+    const titles = await this.db
+      .select({
+        observationTitle1: tblDicomObservationTitles.observationTitle1,
+        observationTitle2: tblDicomObservationTitles.observationTitle2,
+        observationTitle3: tblDicomObservationTitles.observationTitle3,
+        observationTitle4: tblDicomObservationTitles.observationTitle4,
+        observationTitle5: tblDicomObservationTitles.observationTitle5,
+        observationTitle6: tblDicomObservationTitles.observationTitle6,
+        observationTitle7: tblDicomObservationTitles.observationTitle7,
+        observationTitle8: tblDicomObservationTitles.observationTitle8,
+        observationTitle9: tblDicomObservationTitles.observationTitle9,
+        observationTitle10: tblDicomObservationTitles.observationTitle10,
+      })
+      .from(tblDicomObservationTitles)
+      .where(eq(tblDicomObservationTitles.sessionId, sessionId));
+
+    return titles;
+  }
+
+  async getFacultyObservationsBySession(sessionId: number) {
+    const records = await this.db
+      .select({
+        dicomObservationTitlesId:
+          tblDicomObservationTitles.dicomObservationTitlesId,
+        facultyObservation: tblDicomObservationTitles.facultyObservation,
+        observationTitle1: tblDicomObservationTitles.observationTitle1,
+        observationTitle2: tblDicomObservationTitles.observationTitle2,
+        observationTitle3: tblDicomObservationTitles.observationTitle3,
+        observationTitle4: tblDicomObservationTitles.observationTitle4,
+        observationTitle5: tblDicomObservationTitles.observationTitle5,
+        observationTitle6: tblDicomObservationTitles.observationTitle6,
+        observationTitle7: tblDicomObservationTitles.observationTitle7,
+        observationTitle8: tblDicomObservationTitles.observationTitle8,
+        observationTitle9: tblDicomObservationTitles.observationTitle9,
+        observationTitle10: tblDicomObservationTitles.observationTitle10,
+      })
+      .from(tblDicomObservationTitles)
+      .where(
+        and(
+          eq(tblDicomObservationTitles.sessionId, sessionId),
+          or(
+            sql`${tblDicomObservationTitles.observationTitle1} != 'na'`,
+            sql`${tblDicomObservationTitles.observationTitle2} != 'na'`,
+            sql`${tblDicomObservationTitles.observationTitle3} != 'na'`,
+            sql`${tblDicomObservationTitles.observationTitle4} != 'na'`,
+            sql`${tblDicomObservationTitles.observationTitle5} != 'na'`,
+            sql`${tblDicomObservationTitles.observationTitle6} != 'na'`,
+            sql`${tblDicomObservationTitles.observationTitle7} != 'na'`,
+            sql`${tblDicomObservationTitles.observationTitle8} != 'na'`,
+            sql`${tblDicomObservationTitles.observationTitle9} != 'na'`,
+            sql`${tblDicomObservationTitles.observationTitle10} != 'na'`,
+          ),
+        ),
+      );
+
+    return records.map((r) => {
+      const titles = Object.keys(r)
+        .filter((k) => k.startsWith('observationTitle') && r[k] !== 'na')
+        .map((k) => r[k]);
+
+      return {
+        dicomObservationTitlesId: r.dicomObservationTitlesId,
+        titles,
+        facultyObservation: r.facultyObservation,
+      };
+    });
   }
 }

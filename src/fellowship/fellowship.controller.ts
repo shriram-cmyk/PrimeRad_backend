@@ -8,6 +8,7 @@ import {
   Body,
   Param,
   UseGuards,
+  Query,
 } from '@nestjs/common';
 import { FellowshipService } from './fellowship.service';
 import {
@@ -597,5 +598,27 @@ export class FellowshipController {
       body.status,
     );
     return result;
+  }
+
+  @Get('observation-titles')
+  @ApiOperation({ summary: 'Get DICOM observation titles by sessionId' })
+  @ApiQuery({ name: 'sessionId', required: true, type: Number })
+  async getObservationTitles(@Query('sessionId') sessionId: number) {
+    const titles = await this.fellowshipService.getObservationTitlesBySession(
+      Number(sessionId),
+    );
+    return { success: true, data: titles };
+  }
+
+  @Get('faculty-observations')
+  @ApiOperation({
+    summary: 'Get faculty observations for non-empty observation titles',
+  })
+  @ApiQuery({ name: 'sessionId', required: true, type: Number })
+  async getFacultyObservations(@Query('sessionId') sessionId: number) {
+    const data = await this.fellowshipService.getFacultyObservationsBySession(
+      Number(sessionId),
+    );
+    return { success: true, data };
   }
 }
