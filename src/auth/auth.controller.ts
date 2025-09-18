@@ -111,25 +111,23 @@ export class AuthController {
     description: 'Access token refreshed successfully',
   })
   @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
-  async refresh(
-    @Body() refreshDto: RefreshDto,
-    @Request() req: any,
-    @Response() res: any,
-  ) {
+  async refresh(@Request() req: any, @Response() res: any) {
     const refreshToken = req.cookies?.refreshToken;
     if (!refreshToken) {
       throw new UnauthorizedException('Refresh token not found');
     }
-    const accessToken = await this.authService.refresh(
-      refreshDto.userId,
-      refreshDto.refreshToken,
-    );
+
+    const { accessToken, userId } =
+      await this.authService.refresh(refreshToken);
+
+    // ✅ set new access token in cookie
     res.cookie('accessToken', accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'dev',
+      secure: process.env.NODE_ENV !== 'dev', // secure only in prod
       sameSite: 'strict',
-      maxAge: 15 * 60 * 1000,
+      maxAge: 15 * 60 * 1000, // 15 min
     });
-    return res.json({ message: 'Token refreshed' });
+
+    return res.json({ message: 'Access token refreshed', userId });
   }
 }

@@ -60,28 +60,42 @@ export class AuthService {
     };
   }
 
-  async refresh(userId: number, refreshToken: string) {
-    this.logger.log(`Refreshing token for userId: ${userId}`);
-    const user = await this.usersService.getUserById(userId);
-
-    if (!user || user.refreshToken !== refreshToken) {
-      this.logger.warn(`Invalid refresh token attempt for userId: ${userId}`);
-      throw new UnauthorizedException('Invalid refresh token');
-    }
+  async refresh(refreshToken: string) {
+    this.logger.log(`Refreshing token from cookie`);
 
     try {
-      jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET!);
+      const payload = jwt.verify(
+        refreshToken,
+        process.env.JWT_REFRESH_SECRET!,
+      ) as jwt.JwtPayload;
+
+      const userId = payload.sub as unknown as number;
+
+      const user = await this.usersService.getUserById(userId);
+      if (!user || user.refreshToken !== refreshToken) {
+        this.logger.warn(`Invalid refresh token attempt for userId: ${userId}`);
+        throw new UnauthorizedException('Invalid refresh token');
+      }
+
       const newAccessToken = jwt.sign(
         { username: user.fname, sub: user.regId, role: user.role },
         process.env.JWT_SECRET!,
         { expiresIn: process.env.JWT_EXPIRATION || '15m' },
       );
+
       this.logger.log(`Refresh token successful for userId: ${userId}`);
-      return { accessToken: newAccessToken };
-    } catch (err) {
-      this.logger.error(
-        `Refresh token error for userId: ${userId} - ${err.message}`,
-      );
+
+      // (Optional) Rotate refresh token for extra security
+      // const newRefreshToken = jwt.sign(
+      //   { username: user.fname, sub: user.regId, role: user.role },
+      //   process.env.JWT_REFRESH_SECRET!,
+      //   { expiresIn: process.env.JWT_REFRESH_EXPIRATION || '7d' },
+      // );
+      // await this.usersService.saveRefreshToken(user.regId, newRefreshToken);
+
+      return { accessToken: newAccessToken, userId };
+    } catch (err: any) {
+      this.logger.error(`Refresh token error: ${err.message}`);
       throw new UnauthorizedException('Refresh token expired or invalid');
     }
   }
