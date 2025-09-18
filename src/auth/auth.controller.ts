@@ -90,14 +90,14 @@ export class AuthController {
     res.cookie('accessToken', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'none',
       maxAge: 15 * 60 * 1000,
     });
 
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'none',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
@@ -126,7 +126,7 @@ export class AuthController {
     res.cookie('accessToken', accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: 'none',
       maxAge: 15 * 60 * 1000,
     });
 
@@ -156,8 +156,8 @@ export class AuthController {
       }
     }
 
-    res.clearCookie('accessToken', { httpOnly: true, sameSite: 'strict' });
-    res.clearCookie('refreshToken', { httpOnly: true, sameSite: 'strict' });
+    res.clearCookie('accessToken', { httpOnly: true, sameSite: 'none' });
+    res.clearCookie('refreshToken', { httpOnly: true, sameSite: 'none' });
 
     return res.json({ message: 'Logged out successfully' });
   }
