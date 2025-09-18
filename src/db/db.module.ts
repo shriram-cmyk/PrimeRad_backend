@@ -3,28 +3,18 @@ import { drizzle } from 'drizzle-orm/mysql2';
 import mysql, { PoolOptions } from 'mysql2/promise';
 import * as schema from './schema/index';
 
-// Socket-based connection configuration for Cloud Run
 const poolConfig: PoolOptions = {
-  // Use Unix socket instead of TCP
-  socketPath: `/cloudsql/${process.env.CLOUD_SQL_CONNECTION_NAME}`,
-  // host: process.env.DB_HOST || 'localhost',
+  // socketPath: `/cloudsql/${process.env.CLOUD_SQL_CONNECTION_NAME}`,
+  host: process.env.DB_HOST || 'localhost',
   // Database credentials
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || 'vidocto@123',
   database: process.env.DB_NAME || 'vidocto_primemskfellowship',
-
-  // Timeout settings optimized for socket connections
   connectTimeout: 60000,
   // timeout: 30000,
-
-  // Pool settings for serverless
   connectionLimit: 5,
   queueLimit: 0,
-
-  // Character set
   charset: 'utf8mb4',
-
-  // Enable automatic reconnection
   // reconnect: true,
 };
 
@@ -35,7 +25,6 @@ export const db = drizzle(poolConnection, {
   mode: 'default',
 });
 
-// Health check function
 export const checkDatabaseConnection = async (): Promise<boolean> => {
   try {
     const connection = await poolConnection.getConnection();

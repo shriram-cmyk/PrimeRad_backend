@@ -150,4 +150,11 @@ export class UsersService {
       throw new InternalServerErrorException('Failed to save refresh token');
     }
   }
+
+  async clearRefreshToken(userId: number): Promise<void> {
+    await this.db
+      .update(tblRegistration)
+      .set({ refreshToken: null })
+      .where(eq(tblRegistration.regId, userId));
+  }
 }

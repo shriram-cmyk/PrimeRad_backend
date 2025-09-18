@@ -9,6 +9,8 @@ import {
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
+import { LoggerService } from '../logger/logger.service';
+import * as jwt from 'jsonwebtoken';
 import {
   ApiTags,
   ApiOperation,
@@ -53,6 +55,7 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     private readonly usersService: UsersService,
+    private readonly logger: LoggerService,
   ) {}
 
   @UseGuards(AuthGuard('local'))
@@ -120,14 +123,42 @@ export class AuthController {
     const { accessToken, userId } =
       await this.authService.refresh(refreshToken);
 
-    // ✅ set new access token in cookie
     res.cookie('accessToken', accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV !== 'dev', // secure only in prod
+      secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 15 * 60 * 1000, // 15 min
+      maxAge: 15 * 60 * 1000,
     });
 
     return res.json({ message: 'Access token refreshed', userId });
+  }
+
+  @Post('logout')
+  @ApiOperation({ summary: 'Logging out and getting cookies cleared' })
+  @ApiResponse({
+    status: 200,
+    description: 'Logged out successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Error in Logging out' })
+  async logout(@Request() req: any, @Response() res: any) {
+    const refreshToken = req.cookies?.refreshToken;
+
+    if (refreshToken) {
+      try {
+        const payload = jwt.verify(
+          refreshToken,
+          process.env.JWT_REFRESH_SECRET!,
+        ) as jwt.JwtPayload;
+
+        await this.authService.logout(payload.sub as unknown as number);
+      } catch (err) {
+        this.logger.warn(`Invalid refresh token during logout`);
+      }
+    }
+
+    res.clearCookie('accessToken', { httpOnly: true, sameSite: 'strict' });
+    res.clearCookie('refreshToken', { httpOnly: true, sameSite: 'strict' });
+
+    return res.json({ message: 'Logged out successfully' });
   }
 }

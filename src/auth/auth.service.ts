@@ -99,4 +99,11 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token expired or invalid');
     }
   }
+
+  async logout(userId: number): Promise<void> {
+    this.logger.log(`Logging out userId: ${userId}`);
+    await this.usersService.clearRefreshToken(userId);
+
+    this.logger.log(`UserId: ${userId} logged out successfully`);
+  }
 }
