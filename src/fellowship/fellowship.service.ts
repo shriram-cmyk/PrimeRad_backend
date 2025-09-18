@@ -27,9 +27,11 @@ export class FellowshipService {
   async getCapturedProgramsByUser(regId: number, page = 1, limit = 10) {
     try {
       const offset = (page - 1) * limit;
+
+      // Count distinct batches
       const [countResult] = await this.db
         .select({
-          count: sql<number>`COUNT(DISTINCT ${tblPayments.programId})`,
+          count: sql<number>`COUNT(DISTINCT ${tblPayments.batchId})`,
         })
         .from(tblPayments)
         .where(
@@ -41,26 +43,25 @@ export class FellowshipService {
 
       const total = countResult?.count ?? 0;
 
-      // Now fetch distinct programs
+      // Fetch programs grouped by batchId with ANY_VALUE
       const programs = await this.db
         .select({
-          programId: tblProgram.programId,
-          programName: tblProgram.programName,
-          programShortname: tblProgram.programShortname,
-          programUrl: tblProgram.programUrl,
-          programTitle: tblProgram.programTitle,
-          programDescription: tblProgram.programDescription,
-          programImage: tblProgram.programImage,
-          programDuration: tblProgram.programDuration,
+          programId: sql<number>`ANY_VALUE(${tblProgram.programId})`,
+          programName: sql<string>`ANY_VALUE(${tblProgram.programName})`,
+          programShortname: sql<string>`ANY_VALUE(${tblProgram.programShortname})`,
+          programUrl: sql<string>`ANY_VALUE(${tblProgram.programUrl})`,
+          programTitle: sql<string>`ANY_VALUE(${tblProgram.programTitle})`,
+          programDescription: sql<string>`ANY_VALUE(${tblProgram.programDescription})`,
+          programImage: sql<string>`ANY_VALUE(${tblProgram.programImage})`,
+          programDuration: sql<number>`ANY_VALUE(${tblProgram.programDuration})`,
 
-          // pick one batch info (e.g., earliest batch enrolled)
-          batchId: sql<number>`MIN(${tblBatch.batchId})`,
-          batchName: sql<string>`CONCAT('Batch ', MIN(${tblBatch.batchId}))`,
-          batchStart: sql<Date>`MIN(${tblBatch.batchStartdate})`,
-          batchEnd: sql<Date>`MAX(${tblBatch.batchEnddate})`,
+          batchId: tblBatch.batchId,
+          batchName: sql<string>`CONCAT('Batch ', ${tblBatch.batchId})`,
+          batchStart: sql<Date>`ANY_VALUE(${tblBatch.batchStartdate})`,
+          batchEnd: sql<Date>`ANY_VALUE(${tblBatch.batchEnddate})`,
 
           enrolledDate: sql<Date>`MIN(${tblPayments.paymentDate})`,
-          moduleCount: sql<number>`MAX(${tblBatch.modules})`,
+          moduleCount: sql<number>`ANY_VALUE(${tblBatch.modules})`,
           payStatus: sql<string>`MAX(${tblPayments.payStatus})`,
         })
         .from(tblPayments)
@@ -72,7 +73,7 @@ export class FellowshipService {
             eq(tblPayments.payStatus, 'captured'),
           ),
         )
-        .groupBy(tblProgram.programId)
+        .groupBy(tblBatch.batchId) // 👈 only batchId now
         .limit(limit)
         .offset(offset);
 
