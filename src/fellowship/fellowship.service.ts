@@ -73,7 +73,7 @@ export class FellowshipService {
             eq(tblPayments.payStatus, 'captured'),
           ),
         )
-        .groupBy(tblBatch.batchId) // 👈 only batchId now
+        .groupBy(tblBatch.batchId)
         .limit(limit)
         .offset(offset);
 
