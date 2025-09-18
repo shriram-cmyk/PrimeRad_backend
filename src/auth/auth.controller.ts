@@ -5,6 +5,7 @@ import {
   Body,
   UnauthorizedException,
   UseGuards,
+  Response,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
@@ -74,20 +75,61 @@ export class AuthController {
   })
   @ApiResponse({ status: 201, description: 'User logged in successfully' })
   @ApiResponse({ status: 404, description: 'Invalid username or password' })
-  async login(@Body() loginDto: LoginDto, @Request() req: any) {
-    console.log('inside');
-    console.log('user', req.user);
-    return this.authService.login(req.user);
+  async login(
+    @Body() loginDto: LoginDto,
+    @Request() req: any,
+    @Response() res: any,
+  ) {
+    console.log(req.user);
+    const { accessToken, refreshToken, ...userData } =
+      await this.authService.login(req.user);
+
+    res.cookie('accessToken', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000,
+    });
+
+    res.cookie('refreshToken', refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.json({
+      message: 'Logged in successfully',
+      user: userData,
+    });
   }
 
-  // @Post('refresh')
-  // @ApiOperation({ summary: 'Refresh access token using refresh token' })
-  // @ApiResponse({
-  //   status: 200,
-  //   description: 'Access token refreshed successfully',
-  // })
-  // @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
-  // async refresh(@Body() refreshDto: RefreshDto) {
-  //   return this.authService.refresh(refreshDto.userId, refreshDto.refreshToken);
-  // }
+  @Post('refresh')
+  @ApiOperation({ summary: 'Refresh access token using refresh token' })
+  @ApiResponse({
+    status: 200,
+    description: 'Access token refreshed successfully',
+  })
+  @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
+  async refresh(
+    @Body() refreshDto: RefreshDto,
+    @Request() req: any,
+    @Response() res: any,
+  ) {
+    const refreshToken = req.cookies?.refreshToken;
+    if (!refreshToken) {
+      throw new UnauthorizedException('Refresh token not found');
+    }
+    const accessToken = await this.authService.refresh(
+      refreshDto.userId,
+      refreshDto.refreshToken,
+    );
+    res.cookie('accessToken', accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'dev',
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000,
+    });
+    return res.json({ message: 'Token refreshed' });
+  }
 }

@@ -30,24 +30,11 @@ import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 
 export class UserResponseDto {
-  regId: number;
-  salutation: string | null;
   fname: string | null;
   lname: string | null;
   email: string | null;
   mobile: string | null;
   designation: string | null;
-  profilePicture: string | null;
-  role: string;
-  isActive: boolean;
-  isVerified: boolean;
-  lastLoginDate: Date | null;
-  failedLoginAttempts: number;
-  lockoutTime: Date | null;
-  preferences: string | null;
-  twoFactorEnabled: boolean;
-  language: string | null;
-  createdDate: Date | null;
 }
 
 export class CreateUserResponseDto {
@@ -69,11 +56,10 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Post()
-  @Roles('admin', 'superadmin')
+  @Roles('admin', 'superadmin', 'user')
   @ApiOperation({
     summary: 'Create a new user',
-    description:
-      'Creates a new user account. Only accessible by admin or superadmin roles.',
+    description: 'Creates a new user account',
   })
   @ApiBody({
     type: CreateUserDto,

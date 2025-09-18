@@ -63,6 +63,7 @@ export class CreateUserDto {
 
   @ApiProperty({ example: 25, description: 'User age' })
   @IsInt()
+  @IsOptional()
   @Min(0)
   age: number;
 

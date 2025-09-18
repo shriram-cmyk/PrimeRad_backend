@@ -7,7 +7,7 @@ import * as schema from './schema/index';
 const poolConfig: PoolOptions = {
   // Use Unix socket instead of TCP
   socketPath: `/cloudsql/${process.env.CLOUD_SQL_CONNECTION_NAME}`,
-
+  // host: process.env.DB_HOST || 'localhost',
   // Database credentials
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || 'vidocto@123',

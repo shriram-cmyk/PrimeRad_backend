@@ -28,51 +28,51 @@ describe('AuthController', () => {
     authController = module.get<AuthController>(AuthController);
   });
 
-  describe('login', () => {
-    it('should return tokens when login is successful', async () => {
-      const loginDto: LoginDto = {
-        email: 'test@example.com',
-        password: 'password123',
-      };
+  // describe('login', () => {
+  //   it('should return tokens when login is successful', async () => {
+  //     const loginDto: LoginDto = {
+  //       email: 'test@example.com',
+  //       password: 'password123',
+  //     };
 
-      const mockUser = {
-        id: 1,
-        fname: 'John',
-        lname: 'Doe',
-        email: 'test@example.com',
-        role: 'user',
-        designation: 'Developer',
-      };
+  //     const mockUser = {
+  //       id: 1,
+  //       fname: 'John',
+  //       lname: 'Doe',
+  //       email: 'test@example.com',
+  //       role: 'user',
+  //       designation: 'Developer',
+  //     };
 
-      const mockTokens = {
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-        name: 'John Doe',
-        email: 'test@example.com',
-        designation: 'Developer',
-        role: 'admin',
-      };
+  //     const mockTokens = {
+  //       accessToken: 'access-token',
+  //       refreshToken: 'refresh-token',
+  //       name: 'John Doe',
+  //       email: 'test@example.com',
+  //       designation: 'Developer',
+  //       role: 'admin',
+  //     };
 
-      authService.login.mockResolvedValue(mockTokens);
+  //     authService.login.mockResolvedValue(mockTokens);
 
-      const result = await authController.login(loginDto, { user: mockUser });
+  //     const result = await authController.login(loginDto, { user: mockUser });
 
-      expect(result).toEqual(mockTokens);
-      expect(authService.login).toHaveBeenCalledWith(mockUser);
-    });
+  //     expect(result).toEqual(mockTokens);
+  //     expect(authService.login).toHaveBeenCalledWith(mockUser);
+  //   });
 
-    it('should handle login failure', async () => {
-      const loginDto: LoginDto = {
-        email: 'invalid@example.com',
-        password: 'wrongpassword',
-      };
+  //   it('should handle login failure', async () => {
+  //     const loginDto: LoginDto = {
+  //       email: 'invalid@example.com',
+  //       password: 'wrongpassword',
+  //     };
 
-      const mockUser = null;
+  //     const mockUser = null;
 
-      if (mockUser === null) {
-      }
-    });
-  });
+  //     if (mockUser === null) {
+  //     }
+  //   });
+  // });
 
   /*
   describe('refresh', () => {

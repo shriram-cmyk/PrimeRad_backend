@@ -63,7 +63,7 @@ export class UsersService {
 
     try {
       const result = await this.db.insert(tblRegistration).values(userToInsert);
-      return { message: 'User created successfully', result };
+      return { message: 'User created successfully' };
     } catch (error: any) {
       if (error?.code === 'ER_DUP_ENTRY') {
         throw new ConflictException('Email already exists');

@@ -3,6 +3,7 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { LoggerService } from './logger/logger.service';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
@@ -45,7 +46,7 @@ async function bootstrap() {
 
   const logger = app.get(LoggerService);
   app.useLogger(logger);
-
+  app.use(cookieParser());
   const port = process.env.PORT || 3000;
   await app.listen(port, '0.0.0.0');
   logger.log(`Application started on http://localhost:${port}`);
