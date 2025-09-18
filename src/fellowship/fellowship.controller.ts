@@ -19,6 +19,7 @@ import {
   ApiForbiddenResponse,
   ApiResponse,
   ApiParam,
+  ApiQuery,
   ApiBody,
   ApiProperty,
 } from '@nestjs/swagger';
@@ -267,6 +268,30 @@ export class FellowshipController {
       },
     },
   })
+  @ApiQuery({
+    name: 'programId',
+    type: Number,
+    required: true,
+    description: 'ID of the program',
+  })
+  @ApiQuery({
+    name: 'batchId',
+    type: Number,
+    required: true,
+    description: 'ID of the batch',
+  })
+  @ApiQuery({
+    name: 'phaseId',
+    type: Number,
+    required: true,
+    description: 'ID of the phase',
+  })
+  @ApiQuery({
+    name: 'moduleId',
+    type: Number,
+    required: true,
+    description: 'ID of the module',
+  })
   async getSessionsByModule(@Req() req: any) {
     const { programId, batchId, phaseId, moduleId } = req.query;
 
@@ -372,6 +397,7 @@ export class FellowshipController {
       },
     },
   })
+  @ApiParam({ name: 'sessionId', type: Number, description: 'Session ID' })
   async getAssessmentQuestions(@Req() req: any) {
     const sessionId = Number(req.params.sessionId);
     return this.fellowshipService.getAssessmentQuestions(sessionId);
@@ -407,9 +433,10 @@ export class FellowshipController {
       },
     },
   })
+  @ApiParam({ name: 'sessionId', type: Number, description: 'Session ID' })
   async getAssessmentAnswers(@Req() req: any) {
     const sessionId = Number(req.params.sessionId);
-    const regId = Number(req.params.regId);
+    const regId = req.user.sub;
     return this.fellowshipService.getAssessmentAnswers(sessionId, regId);
   }
 
@@ -430,12 +457,13 @@ export class FellowshipController {
       },
     },
   })
+  @ApiParam({ name: 'sessionId', type: Number, description: 'Session ID' })
   async submitAssessmentAnswers(
     @Req() req: any,
     @Body() body: { answers: { questionId: number; answer: string }[] },
   ) {
     const sessionId = Number(req.params.sessionId);
-    const regId = Number(req.params.regId);
+    const regId = req.user.sub;
     return this.fellowshipService.submitAssessmentAnswers(
       sessionId,
       regId,
@@ -477,6 +505,7 @@ export class FellowshipController {
       },
     },
   })
+  @ApiParam({ name: 'sessionId', type: Number, description: 'Session ID' })
   async getSessionQueries(@Req() req: any) {
     const sessionId = Number(req.params.sessionId);
     return this.fellowshipService.getSessionQueriesWithResponses(sessionId);
