@@ -175,22 +175,47 @@ describe('FellowshipService', () => {
   });
 
   describe('getSessionsByModule', () => {
-    it('should return grouped sessions by type', async () => {
+    it('should return grouped sessions by type with progress', async () => {
       const mockSessions = [
         { sessionId: 1, sessionName: 'Session 1', sessionType: 'Video' },
         { sessionId: 2, sessionName: 'Session 2', sessionType: 'Video' },
         { sessionId: 3, sessionName: 'Session 3', sessionType: 'Live' },
       ];
 
-      mockDb.where.mockResolvedValueOnce(mockSessions);
+      const mockStatuses = [
+        { sessionId: 1, sessionStatus: '2' }, // completed
+        { sessionId: 2, sessionStatus: '1' }, // in progress
+        { sessionId: 3, sessionStatus: '2' }, // completed
+      ];
+
+      // Mock sessions query
+      mockDb.select.mockReturnValueOnce({
+        from: jest.fn().mockReturnValueOnce({
+          where: jest.fn().mockResolvedValueOnce(mockSessions),
+        }),
+      });
+
+      // Mock statuses query
+      mockDb.select.mockReturnValueOnce({
+        from: jest.fn().mockReturnValueOnce({
+          where: jest.fn().mockResolvedValueOnce(mockStatuses),
+        }),
+      });
 
       const result = await service.getSessionsByModule(1, 1, 1, 1);
 
       expect(result).toEqual({
         success: true,
         sessions: {
-          Video: ['Session 1', 'Session 2'],
-          Live: ['Session 3'],
+          Video: [
+            { name: 'Session 1', progress: 100 },
+            { name: 'Session 2', progress: 50 },
+          ],
+          Live: [{ name: 'Session 3', progress: 100 }],
+        },
+        progress: {
+          Video: 75, // average of 100 and 50
+          Live: 100,
         },
       });
     });
