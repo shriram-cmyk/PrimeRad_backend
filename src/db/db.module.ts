@@ -3,35 +3,30 @@ import { drizzle } from 'drizzle-orm/mysql2';
 import mysql, { PoolOptions } from 'mysql2/promise';
 import * as schema from './schema/index';
 
-// Simple pool configuration that works with Cloud Run
+// Socket-based connection configuration for Cloud Run
 const poolConfig: PoolOptions = {
-  host: process.env.DB_HOST || 'localhost',
+  // Use Unix socket instead of TCP
+  socketPath: `/cloudsql/${process.env.CLOUD_SQL_CONNECTION_NAME}`,
+
+  // Database credentials
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || 'vidocto@123',
   database: process.env.DB_NAME || 'vidocto_primemskfellowship',
-  port: parseInt(process.env.DB_PORT || '3306'),
 
-  // Critical timeout settings for Cloud Run
+  // Timeout settings optimized for socket connections
   connectTimeout: 60000,
-  // timeout: 60000,
+  // timeout: 30000,
 
-  // Pool settings optimized for serverless
-  connectionLimit: 5, // Low connection count for Cloud Run
+  // Pool settings for serverless
+  connectionLimit: 5,
   queueLimit: 0,
+
+  // Character set
+  charset: 'utf8mb4',
 
   // Enable automatic reconnection
   // reconnect: true,
-
-  // Charset
-  charset: 'utf8mb4',
 };
-
-// Add SSL for production
-if (process.env.NODE_ENV === 'production') {
-  poolConfig.ssl = {
-    rejectUnauthorized: false,
-  };
-}
 
 const poolConnection = mysql.createPool(poolConfig);
 
@@ -46,9 +41,10 @@ export const checkDatabaseConnection = async (): Promise<boolean> => {
     const connection = await poolConnection.getConnection();
     await connection.ping();
     connection.release();
+    console.log('Database connection via socket successful');
     return true;
-  } catch (error) {
-    console.error('Database connection check failed:', error);
+  } catch (error: any) {
+    console.error('Database socket connection failed:', error.message);
     return false;
   }
 };
@@ -69,11 +65,11 @@ export const checkDatabaseConnection = async (): Promise<boolean> => {
 export class DbModule implements OnModuleDestroy {
   async onModuleDestroy() {
     try {
-      console.log('Closing database connections...');
+      console.log('Closing database socket connections...');
       await poolConnection.end();
-      console.log('Database connections closed successfully');
+      console.log('Database socket connections closed successfully');
     } catch (error) {
-      console.error('Error closing database connections:', error);
+      console.error('Error closing database socket connections:', error);
     }
   }
 }
