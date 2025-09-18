@@ -27,9 +27,10 @@ export class FellowshipService {
   async getCapturedProgramsByUser(regId: number, page = 1, limit = 10) {
     try {
       const offset = (page - 1) * limit;
-
       const [countResult] = await this.db
-        .select({ count: sql<number>`COUNT(*)` })
+        .select({
+          count: sql<number>`COUNT(DISTINCT ${tblPayments.programId})`,
+        })
         .from(tblPayments)
         .where(
           and(
@@ -40,6 +41,7 @@ export class FellowshipService {
 
       const total = countResult?.count ?? 0;
 
+      // Now fetch distinct programs
       const programs = await this.db
         .select({
           programId: tblProgram.programId,
@@ -50,13 +52,16 @@ export class FellowshipService {
           programDescription: tblProgram.programDescription,
           programImage: tblProgram.programImage,
           programDuration: tblProgram.programDuration,
-          batchId: tblBatch.batchId,
-          batchName: sql<string>`CONCAT('Batch ', ${tblBatch.batchId})`,
-          batchStart: tblBatch.batchStartdate,
-          batchEnd: tblBatch.batchEnddate,
-          enrolledDate: tblPayments.paymentDate,
-          moduleCount: tblBatch.modules,
-          payStatus: tblPayments.payStatus,
+
+          // pick one batch info (e.g., earliest batch enrolled)
+          batchId: sql<number>`MIN(${tblBatch.batchId})`,
+          batchName: sql<string>`CONCAT('Batch ', MIN(${tblBatch.batchId}))`,
+          batchStart: sql<Date>`MIN(${tblBatch.batchStartdate})`,
+          batchEnd: sql<Date>`MAX(${tblBatch.batchEnddate})`,
+
+          enrolledDate: sql<Date>`MIN(${tblPayments.paymentDate})`,
+          moduleCount: sql<number>`MAX(${tblBatch.modules})`,
+          payStatus: sql<string>`MAX(${tblPayments.payStatus})`,
         })
         .from(tblPayments)
         .leftJoin(tblProgram, eq(tblPayments.programId, tblProgram.programId))
@@ -67,6 +72,7 @@ export class FellowshipService {
             eq(tblPayments.payStatus, 'captured'),
           ),
         )
+        .groupBy(tblProgram.programId)
         .limit(limit)
         .offset(offset);
 

@@ -216,6 +216,8 @@ export class FellowshipController {
     status: 500,
     description: 'Internal server error',
   })
+  @ApiQuery({ name: 'programId', type: Number, description: 'Program ID' })
+  @ApiQuery({ name: 'batchId', type: Number, description: 'Batch ID' })
   async getPhasesAndModules(@Req() req: any) {
     const regId = req.user.reg_id;
     const programId = req.query.program_id;
@@ -332,6 +334,8 @@ export class FellowshipController {
       },
     },
   })
+  @ApiQuery({ name: 'page', type: Number, description: 'Page' })
+  @ApiQuery({ name: 'limit', type: Number, description: 'Limit' })
   async getAllSessions(@Req() req: any) {
     const page = Number(req.query.page) || 1;
     const limit = Number(req.query.limit) || 10;
@@ -364,6 +368,7 @@ export class FellowshipController {
       },
     },
   })
+  @ApiParam({ name: 'sessionId', type: Number, description: 'Session ID' })
   async getSessionDetails(@Req() req: any) {
     const sessionId = Number(req.params.sessionId);
     return this.fellowshipService.getSessionDetails(sessionId);
@@ -403,7 +408,7 @@ export class FellowshipController {
     return this.fellowshipService.getAssessmentQuestions(sessionId);
   }
 
-  @Get('answers/:sessionId/:regId')
+  @Get('answers/:sessionId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'user', 'faculty')
   @ApiOperation({
@@ -440,7 +445,7 @@ export class FellowshipController {
     return this.fellowshipService.getAssessmentAnswers(sessionId, regId);
   }
 
-  @Post('submit/:sessionId/:regId')
+  @Post('submit/:sessionId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'user', 'faculty')
   @ApiOperation({
