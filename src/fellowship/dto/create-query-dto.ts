@@ -12,10 +12,6 @@ export class CreateQueryDto {
   @IsInt()
   sessionId: number;
 
-  @ApiProperty({ example: 5 })
-  @IsInt()
-  regId: number;
-
   @ApiProperty({ example: 1 })
   @IsInt()
   programId: number;

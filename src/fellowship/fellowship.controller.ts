@@ -1,4 +1,14 @@
-import { Controller, Get, Post, Req, Body, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Req,
+  Put,
+  Request,
+  Body,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
 import { FellowshipService } from './fellowship.service';
 import {
   ApiBearerAuth,
@@ -8,12 +18,18 @@ import {
   ApiUnauthorizedResponse,
   ApiForbiddenResponse,
   ApiResponse,
+  ApiParam,
+  ApiBody,
+  ApiProperty,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { CreateQueryResponseDto } from './dto/create-query-response-dto';
 import { CreateQueryDto } from './dto/create-query-dto';
+import { UpdateSessionStatusDto } from './dto/update-session-status-dto';
+import { ParseIntPipe } from '@nestjs/common';
+
 class CapturedProgramDto {
   programId: number;
   programName: string;
@@ -85,7 +101,6 @@ export class FellowshipController {
     description: 'Internal server error',
   })
   async getMyCapturedPrograms(@Req() req: any) {
-    console.log(req.user);
     const regId = req.user.reg_id;
     return this.fellowshipService.getCapturedProgramsByUser(regId);
   }
@@ -224,10 +239,30 @@ export class FellowshipController {
     schema: {
       example: {
         success: true,
-        moduleId: 101,
         sessions: {
-          Lecture: ['Intro to Cardiology', 'Heart Anatomy'],
-          Workshop: ['Live Case Discussion'],
+          Assessment: [
+            {
+              name: 'Program 1-Batch 1-Phase 1-Module 1-1',
+              progress: 100,
+            },
+          ],
+          Vimeo: [
+            {
+              name: 'Program 1-Batch 1-Phase 1-Module 1-2',
+              progress: 100,
+            },
+          ],
+          Dicom: [
+            {
+              name: '1212',
+              progress: 0,
+            },
+          ],
+        },
+        progress: {
+          Assessment: 100,
+          Vimeo: 100,
+          Dicom: 0,
         },
       },
     },
@@ -466,8 +501,12 @@ export class FellowshipController {
       },
     },
   })
-  async createQueryResponse(@Body() dto: CreateQueryResponseDto) {
-    return this.fellowshipService.createQueryResponse(dto);
+  async createQueryResponse(
+    @Body() dto: CreateQueryResponseDto,
+    @Request() req: any,
+  ) {
+    const regId = req.user.sub;
+    return this.fellowshipService.createQueryResponse(dto, regId);
   }
 
   @Post('queries')
@@ -482,7 +521,6 @@ export class FellowshipController {
         data: {
           queriesId: 1,
           sessionId: 101,
-          regId: 5,
           message: 'What is the difference between MRI and CT scan?',
           anonymous: '1',
           anonymousName: 'Anonymous',
@@ -491,7 +529,39 @@ export class FellowshipController {
       },
     },
   })
-  async createQuery(@Body() dto: CreateQueryDto) {
-    return this.fellowshipService.createQuery(dto);
+  async createQuery(@Body() dto: CreateQueryDto, @Request() req: any) {
+    const regId = req.user.sub;
+    return this.fellowshipService.createQuery(dto, regId);
+  }
+
+  @Put(':sessionId/status')
+  @ApiOperation({ summary: 'Update or create session status' })
+  @ApiParam({ name: 'sessionId', type: Number, description: 'Session ID' })
+  @ApiBody({
+    description: 'Session status to update',
+    type: UpdateSessionStatusDto,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Session status updated or created successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Session status updated successfully',
+      },
+    },
+  })
+  async updateSessionStatus(
+    @Param('sessionId', ParseIntPipe) sessionId: number,
+    @Body() body: UpdateSessionStatusDto,
+    @Request() req: any,
+  ) {
+    const regId = req.user.sub;
+    const result = await this.fellowshipService.updateSessionStatus(
+      regId,
+      sessionId,
+      body.status,
+    );
+    return result;
   }
 }

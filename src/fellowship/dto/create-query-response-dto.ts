@@ -6,10 +6,6 @@ export class CreateQueryResponseDto {
   @IsInt()
   queriesId: number;
 
-  @ApiProperty({ example: 10 })
-  @IsInt()
-  regId: number;
-
   @ApiProperty({ example: 'MRI is better for soft tissues.' })
   @IsString()
   response: string;

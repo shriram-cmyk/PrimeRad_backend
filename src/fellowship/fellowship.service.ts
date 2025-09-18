@@ -14,6 +14,7 @@ import {
   tblFaculty,
   tblFacultyMap,
   tblSessionResources,
+  tblSessionstatus,
 } from '../db/schema';
 import { CreateQueryDto } from './dto/create-query-dto';
 import { CreateQueryResponseDto } from './dto/create-query-response-dto';
@@ -206,17 +207,67 @@ export class FellowshipService {
           ),
         );
 
-      const grouped: Record<string, string[]> = {};
-      for (const s of sessions) {
-        if (!grouped[s.sessionType]) {
-          grouped[s.sessionType] = [];
+      const sessionIds = sessions.map((s) => s.sessionId);
+
+      const statuses = await this.db
+        .select({
+          sessionId: tblSessionstatus.sessionId,
+          sessionStatus: tblSessionstatus.sessionStatus,
+        })
+        .from(tblSessionstatus)
+        .where(inArray(tblSessionstatus.sessionId, sessionIds));
+
+      const grouped: Record<
+        string,
+        {
+          sessions: { name: string; progress: number }[];
+          progressValues: number[];
         }
-        grouped[s.sessionType].push(s.sessionName);
+      > = {};
+
+      for (const s of sessions) {
+        const status = statuses.find(
+          (st) => st.sessionId === s.sessionId,
+        )?.sessionStatus;
+
+        let progressValue = 0;
+        if (status === '2') progressValue = 100;
+        else if (status === '1') progressValue = 50;
+
+        if (!grouped[s.sessionType]) {
+          grouped[s.sessionType] = { sessions: [], progressValues: [] };
+        }
+
+        grouped[s.sessionType].sessions.push({
+          name: s.sessionName,
+          progress: progressValue,
+        });
+
+        grouped[s.sessionType].progressValues.push(progressValue);
+      }
+
+      const resultSessions: Record<
+        string,
+        { name: string; progress: number }[]
+      > = {};
+      const progress: Record<string, number> = {};
+
+      for (const key of Object.keys(grouped)) {
+        const g = grouped[key];
+        resultSessions[key] = g.sessions;
+
+        const totalProgress = g.progressValues.reduce((a, b) => a + b, 0);
+        const avgProgress =
+          g.progressValues.length > 0
+            ? Math.round(totalProgress / g.progressValues.length)
+            : 0;
+        progress[key] = avgProgress;
       }
 
       return {
         success: true,
-        sessions: grouped,
+        sessions: resultSessions,
+        progress,
       };
     } catch (error) {
       console.error('Error fetching sessions by module:', error);
@@ -527,13 +578,13 @@ export class FellowshipService {
     }
   }
 
-  async createQuery(dto: CreateQueryDto) {
+  async createQuery(dto: CreateQueryDto, regId: any) {
     const insertedId = await this.db
       .insert(tblQueries)
       .values({
         programId: dto.programId,
         batchId: dto.batchId,
-        regId: dto.regId,
+        regId: regId,
         moduleId: dto.moduleId,
         sessionId: dto.sessionId,
         anonymous: dto.anonymous,
@@ -555,12 +606,12 @@ export class FellowshipService {
     };
   }
 
-  async createQueryResponse(dto: CreateQueryResponseDto) {
+  async createQueryResponse(dto: CreateQueryResponseDto, regId: any) {
     const insertedId = await this.db
       .insert(tblQueryResponses)
       .values({
         queriesId: dto.queriesId,
-        regId: dto.regId,
+        regId: regId,
         response: dto.response,
         status: '1',
       })
@@ -574,5 +625,64 @@ export class FellowshipService {
         createdDate: new Date().toISOString(),
       },
     };
+  }
+
+  async updateSessionStatus(
+    regId: number,
+    sessionId: number,
+    status: '1' | '2',
+  ) {
+    try {
+      const [existing] = await this.db
+        .select()
+        .from(tblSessionstatus)
+        .where(
+          and(
+            eq(tblSessionstatus.regId, regId),
+            eq(tblSessionstatus.sessionId, sessionId),
+          ),
+        );
+
+      if (existing) {
+        await this.db
+          .update(tblSessionstatus)
+          .set({
+            sessionStatus: status,
+            modifiedDate: new Date()
+              .toISOString()
+              .slice(0, 19)
+              .replace('T', ' '),
+          })
+          .where(
+            and(
+              eq(tblSessionstatus.regId, regId),
+              eq(tblSessionstatus.sessionId, sessionId),
+            ),
+          );
+
+        return {
+          success: true,
+          message: 'Session status updated successfully',
+        };
+      } else {
+        await this.db.insert(tblSessionstatus).values({
+          sessionId,
+          regId,
+          programType: '0',
+          sessionType: 0,
+          isZoom: '0',
+          sessionStatus: status,
+          createdDate: new Date().toISOString(),
+        });
+
+        return {
+          success: true,
+          message: 'Session status created successfully',
+        };
+      }
+    } catch (error) {
+      console.error('Error updating session status:', error);
+      throw error;
+    }
   }
 }

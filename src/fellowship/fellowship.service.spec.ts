@@ -456,7 +456,6 @@ describe('FellowshipService', () => {
       const dto: any = {
         programId: 1,
         batchId: 1,
-        regId: 1,
         moduleId: 1,
         sessionId: 1,
         anonymous: '0',
@@ -465,9 +464,11 @@ describe('FellowshipService', () => {
         messagedetail: 'Test detail',
       };
 
+      const regId = '1';
+
       mockDb.$returningId.mockResolvedValueOnce(1);
 
-      const result = await service.createQuery(dto);
+      const result = await service.createQuery(dto, regId);
 
       expect(result.success).toBe(true);
       expect(result.data).toMatchObject(dto);
@@ -480,13 +481,13 @@ describe('FellowshipService', () => {
     it('should create a new query response successfully', async () => {
       const dto = {
         queriesId: 1,
-        regId: 1,
         response: 'Test response',
       };
 
+      const regId = '1';
       mockDb.$returningId.mockResolvedValueOnce(1);
 
-      const result = await service.createQueryResponse(dto);
+      const result = await service.createQueryResponse(dto, regId);
 
       expect(result.success).toBe(true);
       expect(result.data).toMatchObject(dto);
