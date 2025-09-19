@@ -4,8 +4,8 @@ import mysql, { PoolOptions } from 'mysql2/promise';
 import * as schema from './schema/index';
 
 const poolConfig: PoolOptions = {
-  // socketPath: `/cloudsql/${process.env.CLOUD_SQL_CONNECTION_NAME}`,
-  host: process.env.DB_HOST || 'localhost',
+  socketPath: `/cloudsql/${process.env.CLOUD_SQL_CONNECTION_NAME}`,
+  // host: process.env.DB_HOST || 'localhost',
   // Database credentials
   user: process.env.DB_USER || 'root',
   password: process.env.DB_PASSWORD || 'vidocto@123',
