@@ -27,16 +27,7 @@ async function bootstrap() {
     .setTitle('Primerad Academy API')
     .setDescription('API documentation for Primerad Academy backend')
     .setVersion('1.0')
-    .addBearerAuth(
-      {
-        type: 'http',
-        scheme: 'bearer',
-        bearerFormat: 'JWT',
-        name: 'Authorization',
-        in: 'header',
-      },
-      'access-token',
-    )
+    .addCookieAuth('accessToken')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

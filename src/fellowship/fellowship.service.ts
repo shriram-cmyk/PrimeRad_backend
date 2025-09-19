@@ -1,4 +1,4 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { MySql2Database } from 'drizzle-orm/mysql2';
 import {
   tblPayments,
@@ -16,10 +16,17 @@ import {
   tblSessionResources,
   tblSessionstatus,
   tblDicomObservationTitles,
+  tblDicomUserObservations,
+  tblDicomObsTitles,
+  tblDicomUserObs,
 } from '../db/schema';
 import { CreateQueryDto } from './dto/create-query-dto';
 import { CreateQueryResponseDto } from './dto/create-query-response-dto';
 import { and, eq, sql, or, gt, inArray } from 'drizzle-orm';
+export class SubmitUserObservationDto {
+  obsTitleId: number;
+  userObs: string;
+}
 
 @Injectable()
 export class FellowshipService {
@@ -760,5 +767,156 @@ export class FellowshipService {
         facultyObservation: r.facultyObservation,
       };
     });
+  }
+
+  async submitUserObservations(dto: any, regId: any) {
+    try {
+      const data = {
+        obsTitleId: dto.obsTitleId ?? null,
+        regId: regId ?? null,
+        userObs: dto.userObs ?? null,
+      };
+
+      console.log('Data to insert:', data);
+
+      // Check if obsTitleId exists in tblDicomObsTitles
+      const titleExists = await this.db
+        .select()
+        .from(tblDicomObsTitles)
+        .where(eq(tblDicomObsTitles.obsTitleId, data.obsTitleId))
+        .limit(1);
+
+      if (titleExists.length === 0) {
+        throw new Error(
+          `ObsTitleId ${data.obsTitleId} does not exist in tblDicomObsTitles`,
+        );
+      }
+
+      // Check if combination already exists (due to unique constraint)
+      const existingRecord = await this.db
+        .select()
+        .from(tblDicomUserObs)
+        .where(
+          and(
+            eq(tblDicomUserObs.obsTitleId, data.obsTitleId),
+            eq(tblDicomUserObs.regId, data.regId),
+          ),
+        )
+        .limit(1);
+
+      console.log(existingRecord);
+
+      if (existingRecord.length > 0) {
+        await this.db
+          .update(tblDicomUserObs)
+          .set({ userObs: data.userObs })
+          .where(
+            and(
+              eq(tblDicomUserObs.obsTitleId, data.obsTitleId),
+              eq(tblDicomUserObs.regId, data.regId),
+            ),
+          );
+
+        return {
+          success: true,
+          message: 'User observations updated successfully',
+        };
+      } else {
+        await this.db.insert(tblDicomUserObs).values(data);
+        return {
+          success: true,
+          message: 'User observations saved successfully',
+        };
+      }
+    } catch (error) {
+      console.error('Error in submitUserObservations:', error);
+      throw new Error(`Failed to save user observations: ${error.message}`);
+    }
+  }
+
+  async compareObservations(sessionId: number, regId: number) {
+    const facultyRecords = await this.db
+      .select({
+        obsTitleId: tblDicomObsTitles.obsTitleId,
+        observationTitle: tblDicomObsTitles.observationTitle,
+        facultyObservation: tblDicomObsTitles.facultyObservation,
+      })
+      .from(tblDicomObsTitles)
+      .where(eq(tblDicomObsTitles.sessionId, sessionId));
+
+    const userRecords = await this.db
+      .select({
+        obsTitleId: tblDicomUserObs.obsTitleId,
+        userObs: tblDicomUserObs.userObs,
+      })
+      .from(tblDicomUserObs)
+      .innerJoin(
+        tblDicomObsTitles,
+        eq(tblDicomUserObs.obsTitleId, tblDicomObsTitles.obsTitleId),
+      )
+      .where(
+        and(
+          eq(tblDicomObsTitles.sessionId, sessionId),
+          eq(tblDicomUserObs.regId, regId),
+        ),
+      );
+
+    const parsedUserRecords = userRecords.map((record) => {
+      let observations: any;
+      try {
+        observations = JSON.parse(record.userObs ?? '');
+        if (!Array.isArray(observations)) {
+          observations = [record.userObs];
+        }
+      } catch (error) {
+        observations = [record.userObs];
+      }
+
+      return {
+        obsTitleId: record.obsTitleId,
+        observations: observations,
+      };
+    });
+
+    const processedFacultyRecords = facultyRecords.map((record) => {
+      return {
+        obsTitleId: record.obsTitleId,
+        observationTitle: record.observationTitle,
+        facultyObservation:
+          record.facultyObservation && record.facultyObservation.trim() !== ''
+            ? record.facultyObservation
+            : null,
+      };
+    });
+
+    const facultyWithData = processedFacultyRecords.filter(
+      (record) => record.facultyObservation !== null,
+    );
+
+    const finalFacultyRecords =
+      facultyWithData.length === 1 &&
+      processedFacultyRecords[0].facultyObservation
+        ? [processedFacultyRecords[0]]
+        : processedFacultyRecords;
+
+    return {
+      userObservations: parsedUserRecords,
+      facultyObservations: finalFacultyRecords,
+    };
+  }
+
+  async getDicomVideoUrl(sessionId: number) {
+    const [session] = await this.db
+      .select({
+        dicomVideoUrl: tblSessions.dicomVideoUrl,
+      })
+      .from(tblSessions)
+      .where(eq(tblSessions.sessionId, sessionId));
+
+    if (!session) {
+      throw new NotFoundException(`Session ${sessionId} not found`);
+    }
+
+    return session.dicomVideoUrl ?? '';
   }
 }

@@ -31,6 +31,7 @@ import { CreateQueryResponseDto } from './dto/create-query-response-dto';
 import { CreateQueryDto } from './dto/create-query-dto';
 import { UpdateSessionStatusDto } from './dto/update-session-status-dto';
 import { ParseIntPipe } from '@nestjs/common';
+import { SubmitUserObservationDto } from './dto/submit-user-observation-dto';
 
 class CapturedProgramDto {
   programId: number;
@@ -442,7 +443,7 @@ export class FellowshipController {
   @ApiParam({ name: 'sessionId', type: Number, description: 'Session ID' })
   async getAssessmentAnswers(@Req() req: any) {
     const sessionId = Number(req.params.sessionId);
-    const regId = req.user.sub;
+    const regId = req.user.reg_id;
     return this.fellowshipService.getAssessmentAnswers(sessionId, regId);
   }
 
@@ -469,7 +470,7 @@ export class FellowshipController {
     @Body() body: { answers: { questionId: number; answer: string }[] },
   ) {
     const sessionId = Number(req.params.sessionId);
-    const regId = req.user.sub;
+    const regId = req.user.reg_id;
     return this.fellowshipService.submitAssessmentAnswers(
       sessionId,
       regId,
@@ -540,7 +541,7 @@ export class FellowshipController {
     @Body() dto: CreateQueryResponseDto,
     @Request() req: any,
   ) {
-    const regId = req.user.sub;
+    const regId = req.user.reg_id;
     return this.fellowshipService.createQueryResponse(dto, regId);
   }
 
@@ -565,11 +566,12 @@ export class FellowshipController {
     },
   })
   async createQuery(@Body() dto: CreateQueryDto, @Request() req: any) {
-    const regId = req.user.sub;
+    const regId = req.user.reg_id;
     return this.fellowshipService.createQuery(dto, regId);
   }
 
   @Put(':sessionId/status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Update or create session status' })
   @ApiParam({ name: 'sessionId', type: Number, description: 'Session ID' })
   @ApiBody({
@@ -591,7 +593,7 @@ export class FellowshipController {
     @Body() body: UpdateSessionStatusDto,
     @Request() req: any,
   ) {
-    const regId = req.user.sub;
+    const regId = req.user.reg_id;
     const result = await this.fellowshipService.updateSessionStatus(
       regId,
       sessionId,
@@ -601,6 +603,7 @@ export class FellowshipController {
   }
 
   @Get('observation-titles')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Get DICOM observation titles by sessionId' })
   @ApiQuery({ name: 'sessionId', required: true, type: Number })
   async getObservationTitles(@Query('sessionId') sessionId: number) {
@@ -620,5 +623,63 @@ export class FellowshipController {
       Number(sessionId),
     );
     return { success: true, data };
+  }
+
+  @Post('submit-observations')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiOperation({ summary: 'Submit user observations (save or final submit)' })
+  @ApiResponse({
+    status: 201,
+    description: 'Observations submitted successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid input data' })
+  async submitUserObservations(@Body() body: any, @Request() req: any) {
+    const regId = req.user.reg_id;
+    return this.fellowshipService.submitUserObservations(body, regId);
+  }
+
+  @Get('compare-observations/:sessionId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiOperation({
+    summary: 'Compare user and faculty observations for a session',
+  })
+  @ApiParam({
+    name: 'sessionId',
+    type: Number,
+    example: 12,
+    description: 'Session ID',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Comparison of user and faculty observations',
+  })
+  async compareObservations(
+    @Param('sessionId') sessionId: number,
+    @Request() req: any,
+  ) {
+    const regId = req.user.reg_id;
+    return this.fellowshipService.compareObservations(sessionId, regId);
+  }
+
+  @Get(':id/dicom-video-url')
+  @ApiOperation({ summary: 'Get DICOM video URL for a session' })
+  @ApiParam({
+    name: 'id',
+    description: 'The ID of the session',
+    type: Number,
+    example: 5,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Returns the DICOM video URL for the given session',
+    // type: DicomVideoUrlResponse,
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Session not found',
+  })
+  async getDicomVideoUrl(@Param('id', ParseIntPipe) id: number) {
+    const url = await this.fellowshipService.getDicomVideoUrl(id);
+    return { dicomVideoUrl: url };
   }
 }
