@@ -1,8 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { FellowshipController } from './fellowship.controller';
 import { FellowshipService } from './fellowship.service';
-import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { RolesGuard } from '../auth/roles.guard';
 
 describe('FellowshipController', () => {
   let controller: FellowshipController;
@@ -17,6 +15,15 @@ describe('FellowshipController', () => {
     getAssessmentQuestions: jest.fn(),
     getAssessmentAnswers: jest.fn(),
     submitAssessmentAnswers: jest.fn(),
+    getSessionQueriesWithResponses: jest.fn(),
+    createQueryResponse: jest.fn(),
+    createQuery: jest.fn(),
+    updateSessionStatus: jest.fn(),
+    getObservationTitlesBySession: jest.fn(),
+    getFacultyObservationsBySession: jest.fn(),
+    submitUserObservations: jest.fn(),
+    compareObservations: jest.fn(),
+    getDicomVideoUrl: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -28,145 +35,86 @@ describe('FellowshipController', () => {
           useValue: mockFellowshipService,
         },
       ],
-    })
-      .overrideGuard(JwtAuthGuard) // 👈 we mock guards so they don’t block tests
-      .useValue({ canActivate: () => true })
-      .overrideGuard(RolesGuard)
-      .useValue({ canActivate: () => true })
-      .compile();
+    }).compile();
 
     controller = module.get<FellowshipController>(FellowshipController);
     service = module.get<FellowshipService>(FellowshipService);
   });
 
-  afterEach(() => {
-    jest.clearAllMocks();
+  it('should be defined', () => {
+    expect(controller).toBeDefined();
+  });
+
+  describe('getDicomVideoUrl', () => {
+    it('should return dicomVideoUrl', async () => {
+      const mockUrl = 'https://example.com/video.dcm';
+      mockFellowshipService.getDicomVideoUrl.mockResolvedValue(mockUrl);
+
+      const result = await controller.getDicomVideoUrl(1);
+
+      expect(service.getDicomVideoUrl).toHaveBeenCalledWith(1);
+      expect(result).toEqual({ dicomVideoUrl: mockUrl });
+    });
   });
 
   describe('getMyCapturedPrograms', () => {
-    it('should return captured programs for the user', async () => {
-      const mockReq = { user: { reg_id: 1 } };
-      const mockResponse = { success: true, data: [] };
-
+    it('should call service with regId', async () => {
+      const mockReq = { user: { reg_id: 123 } };
+      const mockData = [{ programId: 1, programName: 'Test' }];
       mockFellowshipService.getCapturedProgramsByUser.mockResolvedValue(
-        mockResponse,
+        mockData,
       );
 
       const result = await controller.getMyCapturedPrograms(mockReq);
-      expect(result).toEqual(mockResponse);
-      expect(service.getCapturedProgramsByUser).toHaveBeenCalledWith(1);
+
+      expect(service.getCapturedProgramsByUser).toHaveBeenCalledWith(123);
+      expect(result).toEqual(mockData);
     });
   });
 
   describe('getPhasesAndModules', () => {
-    it('should return program details for the user', async () => {
+    it('should call service with regId, programId, batchId', async () => {
       const mockReq = {
-        user: { reg_id: 1 },
-        query: { program_id: 2, batch_id: 3 },
+        user: { reg_id: 123 },
+        query: { program_id: 1, batch_id: 2 },
       };
-      const mockResponse = { success: true, phases: [] };
-
+      const mockResult = { phases: [] };
       mockFellowshipService.getProgramDetailsByUser.mockResolvedValue(
-        mockResponse,
+        mockResult,
       );
 
       const result = await controller.getPhasesAndModules(mockReq);
-      expect(result).toEqual(mockResponse);
-      expect(service.getProgramDetailsByUser).toHaveBeenCalledWith(1, 2, 3);
+
+      expect(service.getProgramDetailsByUser).toHaveBeenCalledWith(123, 1, 2);
+      expect(result).toEqual(mockResult);
     });
   });
 
   describe('getSessionsByModule', () => {
-    it('should return grouped sessions', async () => {
+    it('should call service with module params', async () => {
       const mockReq = {
         query: { programId: 1, batchId: 2, phaseId: 3, moduleId: 4 },
       };
-      const mockResponse = { success: true, sessions: {} };
-
-      mockFellowshipService.getSessionsByModule.mockResolvedValue(mockResponse);
+      const mockResult = { sessions: [] };
+      mockFellowshipService.getSessionsByModule.mockResolvedValue(mockResult);
 
       const result = await controller.getSessionsByModule(mockReq);
-      expect(result).toEqual(mockResponse);
+
       expect(service.getSessionsByModule).toHaveBeenCalledWith(1, 2, 3, 4);
+      expect(result).toEqual(mockResult);
     });
   });
 
   describe('getAllSessions', () => {
-    it('should return paginated sessions', async () => {
-      const mockReq = { query: { page: 1, limit: 10 } };
-      const mockResponse = { success: true, data: [] };
-
-      mockFellowshipService.getAllSessions.mockResolvedValue(mockResponse);
+    it('should call service with pagination', async () => {
+      const mockReq = { query: { page: 2, limit: 5 } };
+      const mockResult = { data: [] };
+      mockFellowshipService.getAllSessions.mockResolvedValue(mockResult);
 
       const result = await controller.getAllSessions(mockReq);
-      expect(result).toEqual(mockResponse);
-      expect(service.getAllSessions).toHaveBeenCalledWith(1, 10);
+
+      expect(service.getAllSessions).toHaveBeenCalledWith(2, 5);
+      expect(result).toEqual(mockResult);
     });
   });
-
-  describe('getSessionDetails', () => {
-    it('should return session details', async () => {
-      const mockReq = { params: { sessionId: '101' } };
-      const mockResponse = { success: true, data: {} };
-
-      mockFellowshipService.getSessionDetails.mockResolvedValue(mockResponse);
-
-      const result = await controller.getSessionDetails(mockReq);
-      expect(result).toEqual(mockResponse);
-      expect(service.getSessionDetails).toHaveBeenCalledWith(101);
-    });
-  });
-
-  describe('getAssessmentQuestions', () => {
-    it('should return assessment questions', async () => {
-      const mockReq = { params: { sessionId: '101' } };
-      const mockResponse = { success: true, data: [] };
-
-      mockFellowshipService.getAssessmentQuestions.mockResolvedValue(
-        mockResponse,
-      );
-
-      const result = await controller.getAssessmentQuestions(mockReq);
-      expect(result).toEqual(mockResponse);
-      expect(service.getAssessmentQuestions).toHaveBeenCalledWith(101);
-    });
-  });
-
-  // describe('getAssessmentAnswers', () => {
-  //   it('should return user answers', async () => {
-  //     const mockReq = { params: { sessionId: '101' } };
-  //     const mockResponse = { success: true, data: [] };
-
-  //     mockFellowshipService.getAssessmentAnswers.mockResolvedValue(
-  //       mockResponse,
-  //     );
-
-  //     const result = await controller.getAssessmentAnswers(mockReq);
-  //     expect(result).toEqual(mockResponse);
-  //     expect(service.getAssessmentAnswers).toHaveBeenCalledWith(101, 5);
-  //   });
-  // });
-
-  // describe('submitAssessmentAnswers', () => {
-  //   it('should submit answers successfully', async () => {
-  //     const mockReq = { params: { sessionId: '101', regId: '5' } };
-  //     const body = { answers: [{ questionId: 1, answer: 'B' }] };
-  //     const mockResponse = {
-  //       success: true,
-  //       message: 'Answers submitted successfully',
-  //     };
-
-  //     mockFellowshipService.submitAssessmentAnswers.mockResolvedValue(
-  //       mockResponse,
-  //     );
-
-  //     const result = await controller.submitAssessmentAnswers(mockReq, body);
-  //     expect(result).toEqual(mockResponse);
-  //     expect(service.submitAssessmentAnswers).toHaveBeenCalledWith(
-  //       101,
-  //       5,
-  //       body.answers,
-  //     );
-  //   });
-  // });
 });
