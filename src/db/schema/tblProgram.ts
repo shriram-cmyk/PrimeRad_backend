@@ -25,6 +25,7 @@ export const tblProgram = mysqlTable(
     programImage: varchar('program_image', { length: 255 }),
     programDuration: varchar('program_duration', { length: 20 }),
     salesPage: varchar('sales_page', { length: 500 }),
+    // programType: varchar('program_type', { length: 500 }),
     adminEmail: varchar('admin_email', { length: 100 }),
     live: mysqlEnum(['Yes', 'No']).notNull(),
     status: mysqlEnum(['1', '0']).notNull(),

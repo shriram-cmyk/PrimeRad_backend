@@ -19,6 +19,7 @@ import {
   tblDicomUserObservations,
   tblDicomObsTitles,
   tblDicomUserObs,
+  tblCrsections,
 } from '../db/schema';
 import { CreateQueryDto } from './dto/create-query-dto';
 import { CreateQueryResponseDto } from './dto/create-query-response-dto';
@@ -36,11 +37,9 @@ export class FellowshipService {
     try {
       const offset = (page - 1) * limit;
 
-      // Count distinct batches
+      // Total distinct batches
       const [countResult] = await this.db
-        .select({
-          count: sql<number>`COUNT(DISTINCT ${tblPayments.batchId})`,
-        })
+        .select({ total: sql<number>`COUNT(DISTINCT ${tblPayments.batchId})` })
         .from(tblPayments)
         .where(
           and(
@@ -49,8 +48,9 @@ export class FellowshipService {
           ),
         );
 
-      const total = countResult?.count ?? 0;
+      const total = countResult?.total ?? 0;
 
+      // Fetch paginated programs
       const programs = await this.db
         .select({
           programId: sql<number>`ANY_VALUE(${tblProgram.programId})`,
@@ -106,10 +106,9 @@ export class FellowshipService {
     batchId: number,
   ) {
     try {
+      // --- Check if user purchased
       const [payment] = await this.db
-        .select({
-          paymentId: tblPayments.paymentId,
-        })
+        .select({ paymentId: tblPayments.paymentId })
         .from(tblPayments)
         .where(
           and(
@@ -127,6 +126,7 @@ export class FellowshipService {
         };
       }
 
+      // --- Get batch-level counts
       const [batchDetails] = await this.db
         .select({
           modulesCount: tblBatch.modules,
@@ -141,6 +141,7 @@ export class FellowshipService {
           and(eq(tblBatch.programId, programId), eq(tblBatch.batchId, batchId)),
         );
 
+      // --- Normal Phases + Modules
       const phases = await this.db
         .select({
           phaseId: tblPhases.phaseId,
@@ -186,11 +187,54 @@ export class FellowshipService {
         });
       }
 
+      // --- Special Focus Tracks (crsections)
+      const crsections = await this.db
+        .select({
+          crsectionId: tblCrsections.crsectionId,
+          crsectionName: tblCrsections.crsectionName,
+          crsectionDescription: tblCrsections.crsectionDescription,
+        })
+        .from(tblCrsections)
+        .where(
+          and(
+            eq(tblCrsections.programId, programId),
+            eq(tblCrsections.batchId, batchId),
+            eq(tblCrsections.status, '1'),
+          ),
+        );
+
+      const specialFocusTracks: any[] = [];
+      for (const crs of crsections) {
+        const crSessions = await this.db
+          .select({
+            sessionId: tblSessions.sessionId,
+            sessionName: tblSessions.sessionName,
+            sessionType: tblSessions.sessionType,
+          })
+          .from(tblSessions)
+          .where(
+            and(
+              eq(tblSessions.programId, programId),
+              eq(tblSessions.batchId, batchId),
+              eq(tblSessions.crsectionId, crs.crsectionId),
+            ),
+          );
+
+        if (crSessions.length > 0) {
+          specialFocusTracks.push({
+            trackTitle: crs.crsectionName || 'Special Focus',
+            trackDescription: crs.crsectionDescription,
+            sessions: crSessions,
+          });
+        }
+      }
+
       return {
         success: true,
         counts: batchDetails ?? {},
-        trackCount: phasesWithModules.length,
+        trackCount: phasesWithModules.length + specialFocusTracks.length,
         phases: phasesWithModules,
+        specialFocus: specialFocusTracks, // 👈 new field
       };
     } catch (error) {
       console.error('Error fetching program details:', error);
@@ -234,8 +278,9 @@ export class FellowshipService {
       const grouped: Record<
         string,
         {
-          sessions: { name: string; progress: number }[];
-          progressValues: number[];
+          sessions: { name: string; status: string }[];
+          completedCount: number;
+          totalCount: number;
         }
       > = {};
 
@@ -244,38 +289,45 @@ export class FellowshipService {
           (st) => st.sessionId === s.sessionId,
         )?.sessionStatus;
 
-        let progressValue = 0;
-        if (status === '2') progressValue = 100;
-        else if (status === '1') progressValue = 50;
+        let statusText = 'Not Opened';
+        if (status === '2') statusText = 'Completed';
+        else if (status === '1') statusText = 'In Progress';
 
         if (!grouped[s.sessionType]) {
-          grouped[s.sessionType] = { sessions: [], progressValues: [] };
+          grouped[s.sessionType] = {
+            sessions: [],
+            completedCount: 0,
+            totalCount: 0,
+          };
         }
 
         grouped[s.sessionType].sessions.push({
           name: s.sessionName,
-          progress: progressValue,
+          status: statusText,
         });
 
-        grouped[s.sessionType].progressValues.push(progressValue);
+        // count totals
+        grouped[s.sessionType].totalCount++;
+        if (status === '2') {
+          grouped[s.sessionType].completedCount++;
+        }
       }
 
-      const resultSessions: Record<
-        string,
-        { name: string; progress: number }[]
-      > = {};
+      const resultSessions: Record<string, { name: string; status: string }[]> =
+        {};
       const progress: Record<string, number> = {};
 
       for (const key of Object.keys(grouped)) {
         const g = grouped[key];
         resultSessions[key] = g.sessions;
 
-        const totalProgress = g.progressValues.reduce((a, b) => a + b, 0);
-        const avgProgress =
-          g.progressValues.length > 0
-            ? Math.round(totalProgress / g.progressValues.length)
+        // new completion percentage logic
+        const completionPercentage =
+          g.totalCount > 0
+            ? Math.round((g.completedCount / g.totalCount) * 100)
             : 0;
-        progress[key] = avgProgress;
+
+        progress[key] = completionPercentage;
       }
 
       return {
@@ -779,7 +831,6 @@ export class FellowshipService {
 
       console.log('Data to insert:', data);
 
-      // Check if obsTitleId exists in tblDicomObsTitles
       const titleExists = await this.db
         .select()
         .from(tblDicomObsTitles)
@@ -792,7 +843,6 @@ export class FellowshipService {
         );
       }
 
-      // Check if combination already exists (due to unique constraint)
       const existingRecord = await this.db
         .select()
         .from(tblDicomUserObs)

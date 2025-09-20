@@ -8,6 +8,7 @@ import { ConfigModule } from '@nestjs/config';
 import { LoggerModule } from './logger/logger.module';
 import { FellowshipModule } from './fellowship/fellowship.module';
 import { PacsAuthModule } from './pacs-dicom/pacs-dicom-auth.module';
+import { OpenAccessModule } from './open-access/open-access.module';
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
@@ -17,6 +18,7 @@ import { PacsAuthModule } from './pacs-dicom/pacs-dicom-auth.module';
     AuthModule,
     FellowshipModule,
     PacsAuthModule,
+    OpenAccessModule,
   ],
   controllers: [AppController],
   providers: [AppService],

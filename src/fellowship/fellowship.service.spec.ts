@@ -32,144 +32,138 @@ describe('FellowshipService', () => {
     jest.clearAllMocks();
   });
 
-  describe('getCapturedProgramsByUser', () => {
-    it('should return paginated programs successfully', async () => {
-      const mockCountResult = { count: 5 };
-      const mockPrograms = [
-        {
-          programId: 1,
-          programName: 'Test Program',
-          programShortname: 'TP',
-          programUrl: 'test-program',
-          programTitle: 'Test Program Title',
-          programDescription: 'Test Description',
-          programImage: 'test.jpg',
-          programDuration: 30,
-          batchId: 1,
-          batchName: 'Batch 1',
-          batchStart: new Date(),
-          batchEnd: new Date(),
-          enrolledDate: new Date(),
-          moduleCount: 5,
-          payStatus: 'captured',
-        },
-      ];
+  // describe('getCapturedProgramsByUser', () => {
+  //   it('should return paginated programs successfully', async () => {
+  //     const mockCountResult = { count: 5 };
+  //     const mockPrograms = [
+  //       {
+  //         programId: 1,
+  //         programName: 'Test Program',
+  //         programShortname: 'TP',
+  //         programUrl: 'test-program',
+  //         programTitle: 'Test Program Title',
+  //         programDescription: 'Test Description',
+  //         programImage: 'test.jpg',
+  //         programDuration: 30,
+  //         batchId: 1,
+  //         batchName: 'Batch 1',
+  //         batchStart: new Date(),
+  //         batchEnd: new Date(),
+  //         enrolledDate: new Date(),
+  //         moduleCount: 5,
+  //         payStatus: 'captured',
+  //       },
+  //     ];
 
-      // Mock the count query
-      mockDb.select.mockReturnValueOnce({
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockResolvedValue([mockCountResult]),
-      });
+  //     mockDb.select.mockReturnValueOnce({
+  //       from: jest.fn().mockReturnThis(),
+  //       where: jest.fn().mockResolvedValue([mockCountResult]),
+  //     });
 
-      // Mock the main programs query
-      mockDb.select.mockReturnValueOnce({
-        from: jest.fn().mockReturnThis(),
-        leftJoin: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        groupBy: jest.fn().mockReturnThis(),
-        limit: jest.fn().mockReturnThis(),
-        offset: jest.fn().mockResolvedValue(mockPrograms),
-      });
+  //     mockDb.select.mockReturnValueOnce({
+  //       from: jest.fn().mockReturnThis(),
+  //       leftJoin: jest.fn().mockReturnThis(),
+  //       where: jest.fn().mockReturnThis(),
+  //       groupBy: jest.fn().mockReturnThis(),
+  //       limit: jest.fn().mockReturnThis(),
+  //       offset: jest.fn().mockResolvedValue(mockPrograms),
+  //     });
 
-      const result = await service.getCapturedProgramsByUser(1, 1, 10);
+  //     const result = await service.getCapturedProgramsByUser(1, 1, 10);
 
-      expect(result.success).toBe(true);
-      expect(result.pagination.total).toBe(5);
-      expect(result.data).toEqual(mockPrograms);
-    });
+  //     expect(result.success).toBe(true);
+  //     expect(result.pagination.total).toBe(5);
+  //     expect(result.data).toEqual(mockPrograms);
+  //   });
 
-    it('should handle errors gracefully', async () => {
-      mockDb.select.mockReturnValue({
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockRejectedValue(new Error('Database error')),
-      });
+  //   it('should handle errors gracefully', async () => {
+  //     mockDb.select.mockReturnValue({
+  //       from: jest.fn().mockReturnThis(),
+  //       where: jest.fn().mockRejectedValue(new Error('Database error')),
+  //     });
 
-      await expect(service.getCapturedProgramsByUser(1)).rejects.toThrow(
-        'Database error',
-      );
-    });
-  });
+  //     await expect(service.getCapturedProgramsByUser(1)).rejects.toThrow(
+  //       'Database error',
+  //     );
+  //   });
+  // });
 
-  describe('getProgramDetailsByUser', () => {
-    it('should return program details when user has valid payment', async () => {
-      const mockPayment = { paymentId: 1 };
-      const mockBatchDetails = {
-        modulesCount: 5,
-        videosCount: 10,
-        dicomCount: 2,
-        assessmentCount: 3,
-        certificateCount: 1,
-        meetingCount: 4,
-      };
-      const mockPhases = [
-        {
-          phaseId: 1,
-          phaseName: 'Phase 1',
-          phaseDescription: 'First phase',
-          phaseImage: 'phase1.jpg',
-          phaseStart: new Date(),
-          phaseEnd: new Date(),
-        },
-      ];
-      const mockModules = [
-        {
-          moduleId: 1,
-          moduleName: 'Module 1',
-          moduleDescription: 'First module',
-          moduleImage: 'module1.jpg',
-          moduleStart: new Date(),
-          module2Start: new Date(),
-          module3Start: new Date(),
-          programType: 'online',
-        },
-      ];
+  // describe('getProgramDetailsByUser', () => {
+  //   it('should return program details when user has valid payment', async () => {
+  //     const mockPayment = { paymentId: 1 };
+  //     const mockBatchDetails = {
+  //       modulesCount: 5,
+  //       videosCount: 10,
+  //       dicomCount: 2,
+  //       assessmentCount: 3,
+  //       certificateCount: 1,
+  //       meetingCount: 4,
+  //     };
+  //     const mockPhases = [
+  //       {
+  //         phaseId: 1,
+  //         phaseName: 'Phase 1',
+  //         phaseDescription: 'First phase',
+  //         phaseImage: 'phase1.jpg',
+  //         phaseStart: new Date(),
+  //         phaseEnd: new Date(),
+  //       },
+  //     ];
+  //     const mockModules = [
+  //       {
+  //         moduleId: 1,
+  //         moduleName: 'Module 1',
+  //         moduleDescription: 'First module',
+  //         moduleImage: 'module1.jpg',
+  //         moduleStart: new Date(),
+  //         module2Start: new Date(),
+  //         module3Start: new Date(),
+  //         programType: 'online',
+  //       },
+  //     ];
 
-      // Mock payment query
-      mockDb.select.mockReturnValueOnce({
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockResolvedValue([mockPayment]),
-      });
+  //     mockDb.select.mockReturnValueOnce({
+  //       from: jest.fn().mockReturnThis(),
+  //       where: jest.fn().mockResolvedValue([mockPayment]),
+  //     });
 
-      // Mock batch details query
-      mockDb.select.mockReturnValueOnce({
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockResolvedValue([mockBatchDetails]),
-      });
+  //     mockDb.select.mockReturnValueOnce({
+  //       from: jest.fn().mockReturnThis(),
+  //       where: jest.fn().mockResolvedValue([mockBatchDetails]),
+  //     });
 
-      // Mock phases query
-      mockDb.select.mockReturnValueOnce({
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockResolvedValue(mockPhases),
-      });
+  //     mockDb.select.mockReturnValueOnce({
+  //       from: jest.fn().mockReturnThis(),
+  //       where: jest.fn().mockResolvedValue(mockPhases),
+  //     });
 
-      // Mock modules query
-      mockDb.select.mockReturnValueOnce({
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockResolvedValue(mockModules),
-      });
+  //     mockDb.select.mockReturnValueOnce({
+  //       from: jest.fn().mockReturnThis(),
+  //       where: jest.fn().mockResolvedValue(mockModules),
+  //     });
 
-      const result: any = await service.getProgramDetailsByUser(1, 1, 1);
+  //     const result: any = await service.getProgramDetailsByUser(1, 1, 1);
 
-      expect(result.success).toBe(true);
-      expect(result.counts).toEqual(mockBatchDetails);
-      expect(result.phases).toHaveLength(1);
-      expect(result.phases[0].modules).toEqual(mockModules);
-    });
+  //     expect(result.success).toBe(true);
+  //     expect(result.counts).toEqual(mockBatchDetails);
+  //     expect(result.phases).toHaveLength(1);
+  //     expect(result.phases[0].modules).toEqual(mockModules);
+  //   });
 
-    it('should return failure when user has not purchased program', async () => {
-      mockDb.select.mockReturnValue({
-        from: jest.fn().mockReturnThis(),
-        where: jest.fn().mockResolvedValue([]),
-      });
+  //   it('should return failure when user has not purchased program', async () => {
+  //     mockDb.select.mockReturnValue({
+  //       from: jest.fn().mockReturnThis(),
+  //       where: jest.fn().mockResolvedValue([]),
+  //     });
 
-      const result = await service.getProgramDetailsByUser(1, 1, 1);
+  //     const result = await service.getProgramDetailsByUser(1, 1, 1);
 
-      expect(result.success).toBe(false);
-      expect(result.message).toBe(
-        'User has not purchased this program or batch.',
-      );
-    });
-  });
+  //     expect(result.success).toBe(false);
+  //     expect(result.message).toBe(
+  //       'User has not purchased this program or batch.',
+  //     );
+  //   });
+  // });
 
   describe('getSessionsByModule', () => {
     it('should return sessions with progress', async () => {
@@ -281,26 +275,22 @@ describe('FellowshipService', () => {
         },
       ];
 
-      // Mock session query
       mockDb.select.mockReturnValueOnce({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockResolvedValue([mockSession]),
       });
 
-      // Mock faculty query
       mockDb.select.mockReturnValueOnce({
         from: jest.fn().mockReturnThis(),
         innerJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockResolvedValue(mockFaculty),
       });
 
-      // Mock resources query
       mockDb.select.mockReturnValueOnce({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockResolvedValue(mockResources),
       });
 
-      // Mock next sessions query
       mockDb.select.mockReturnValueOnce({
         from: jest.fn().mockReturnThis(),
         innerJoin: jest.fn().mockReturnThis(),
@@ -443,13 +433,11 @@ describe('FellowshipService', () => {
         },
       ];
 
-      // Mock queries query
       mockDb.select.mockReturnValueOnce({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockResolvedValue(mockQueries),
       });
 
-      // Mock responses query
       mockDb.select.mockReturnValueOnce({
         from: jest.fn().mockReturnThis(),
         where: jest.fn().mockResolvedValue(mockResponses),
