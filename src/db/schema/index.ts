@@ -74,3 +74,4 @@ export * from './tblUserNotificationOptin';
 export * from './tblUserPollmap';
 export * from './tblUserTickets';
 export * from './tblUserToken';
+export * from './tblEnrollments';
