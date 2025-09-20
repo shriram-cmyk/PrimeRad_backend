@@ -38,56 +38,61 @@ export class FellowshipService {
     try {
       const offset = (page - 1) * limit;
 
-      // Count total enrollments (no distinct/grouping needed now)
-      const [countResult] = await this.db
-        .select({ total: sql<number>`COUNT(*)` })
-        .from(tblEnrollments)
-        .where(
-          and(
-            eq(tblEnrollments.regId, regId),
-            eq(tblEnrollments.payStatus, 'captured'),
+      // Use Promise.all for parallel execution - this is the key optimization
+      const [programs, countResult] = await Promise.all([
+        // Main query - using ANY_VALUE() for MySQL ONLY_FULL_GROUP_BY compatibility
+        this.db
+          .select({
+            programId: tblProgram.programId,
+            programName: sql<string>`ANY_VALUE(${tblProgram.programName})`,
+            programShortname: sql<string>`ANY_VALUE(${tblProgram.programShortname})`,
+            programUrl: sql<string>`ANY_VALUE(${tblProgram.programUrl})`,
+            programTitle: sql<string>`ANY_VALUE(${tblProgram.programTitle})`,
+            programDescription: sql<string>`ANY_VALUE(${tblProgram.programDescription})`,
+            programImage: sql<string>`ANY_VALUE(CONCAT('https://primeradacademy.com/admin/support/uploads/banners/', ${tblProgram.programImage}))`,
+            programDuration: sql<string>`ANY_VALUE(${tblProgram.programDuration})`,
+
+            batchId: tblBatch.batchId,
+            batchName: sql<string>`CONCAT('Batch ', ANY_VALUE(${tblBatch.batchId}))`,
+            batchStart: sql<Date>`ANY_VALUE(${tblBatch.batchStartdate})`,
+            batchEnd: sql<Date>`ANY_VALUE(${tblBatch.batchEnddate})`,
+            moduleCount: sql<number>`ANY_VALUE(${tblBatch.modules})`,
+
+            enrolledDate: sql<Date>`MIN(${tblEnrollments.enrolledDate})`,
+            payStatus: sql<string>`MAX(${tblEnrollments.payStatus})`,
+          })
+          .from(tblEnrollments)
+          .innerJoin(
+            tblProgram,
+            eq(tblEnrollments.programId, tblProgram.programId),
+          )
+          .innerJoin(tblBatch, eq(tblEnrollments.batchId, tblBatch.batchId))
+          .where(
+            and(
+              eq(tblEnrollments.regId, regId),
+              eq(tblEnrollments.payStatus, 'captured'),
+            ),
+          )
+          .groupBy(tblEnrollments.programId, tblEnrollments.batchId)
+          .orderBy(sql`MIN(${tblEnrollments.enrolledDate})`)
+          .limit(limit)
+          .offset(offset),
+
+        // Optimized count query - much faster than your original
+        this.db
+          .select({
+            total: sql<number>`COUNT(DISTINCT CONCAT(${tblEnrollments.programId}, '-', ${tblEnrollments.batchId}))`,
+          })
+          .from(tblEnrollments)
+          .where(
+            and(
+              eq(tblEnrollments.regId, regId),
+              eq(tblEnrollments.payStatus, 'captured'),
+            ),
           ),
-        );
+      ]);
 
-      const total = countResult?.total ?? 0;
-
-      const programs = await this.db
-        .select({
-          programId: tblProgram.programId,
-          programName: sql<string>`ANY_VALUE(${tblProgram.programName})`,
-          programShortname: sql<string>`ANY_VALUE(${tblProgram.programShortname})`,
-          programUrl: sql<string>`ANY_VALUE(${tblProgram.programUrl})`,
-          programTitle: sql<string>`ANY_VALUE(${tblProgram.programTitle})`,
-          programDescription: sql<string>`ANY_VALUE(${tblProgram.programDescription})`,
-          programImage: sql<string>`
-      ANY_VALUE(CONCAT('https://primeradacademy.com/admin/support/uploads/banners/', ${tblProgram.programImage}))
-    `,
-          programDuration: sql<string>`ANY_VALUE(${tblProgram.programDuration})`,
-
-          batchId: tblBatch.batchId,
-          batchName: sql<string>`CONCAT('Batch ', ${tblBatch.batchId})`,
-          batchStart: sql<Date>`ANY_VALUE(${tblBatch.batchStartdate})`,
-          batchEnd: sql<Date>`ANY_VALUE(${tblBatch.batchEnddate})`,
-          moduleCount: sql<number>`ANY_VALUE(${tblBatch.modules})`,
-
-          enrolledDate: sql<Date>`MIN(${tblEnrollments.enrolledDate})`,
-          payStatus: sql<string>`MAX(${tblEnrollments.payStatus})`,
-        })
-        .from(tblEnrollments)
-        .innerJoin(
-          tblProgram,
-          eq(tblEnrollments.programId, tblProgram.programId),
-        )
-        .innerJoin(tblBatch, eq(tblEnrollments.batchId, tblBatch.batchId))
-        .where(
-          and(
-            eq(tblEnrollments.regId, regId),
-            eq(tblEnrollments.payStatus, 'captured'),
-          ),
-        )
-        .groupBy(tblEnrollments.programId, tblEnrollments.batchId)
-        .orderBy(sql`MIN(${tblEnrollments.enrolledDate})`)
-        .limit(limit);
+      const total = countResult[0]?.total ?? 0;
 
       return {
         success: true,
