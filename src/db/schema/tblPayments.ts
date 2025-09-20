@@ -11,6 +11,7 @@ import {
   timestamp,
   primaryKey,
   datetime,
+  index,
 } from 'drizzle-orm/mysql-core';
 
 export const tblPayments = mysqlTable(
@@ -51,7 +52,6 @@ export const tblPayments = mysqlTable(
     pgCurrency: varchar('pg_currency', { length: 50 }),
     pgAmount: varchar('pg_amount', { length: 50 }),
     paymentEntry: varchar('payment_entry', { length: 50 }),
-    // you can use { mode: 'date' }, if you want to have Date as type for this column
     paymentDate: date('payment_date', { mode: 'string' }),
     payId: varchar('pay_id', { length: 50 }),
     payStatus: varchar('pay_status', { length: 50 }),
@@ -63,11 +63,14 @@ export const tblPayments = mysqlTable(
     modifiedDate: datetime('modified_date', { mode: 'string' }),
     handsonId: varchar('handson_id', { length: 50 }),
     facultyIds: varchar('faculty_ids', { length: 255 }),
-    // you can use { mode: 'date' }, if you want to have Date as type for this column
     scheduledDate: date('scheduled_date', { mode: 'string' }),
     timing: varchar({ length: 100 }),
   },
   (table) => [
     primaryKey({ columns: [table.paymentId], name: 'tbl_payments_payment_id' }),
+    index('idx_user_status').on(table.regId, table.payStatus),
+    index('idx_batch_id').on(table.batchId),
+    index('idx_program_id').on(table.programId),
+    index('idx_payment_date').on(table.paymentDate),
   ],
 );
