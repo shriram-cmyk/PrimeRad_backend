@@ -13,10 +13,10 @@ import { redisStore } from 'cache-manager-redis-store';
       useFactory: async () => ({
         store: await redisStore({
           socket: {
-            host: 'localhost', // works because WSL shares localhost
+            host: '10.132.0.2', // works because WSL shares localhost
             port: 6379,
           },
-          ttl: 60 * 5,
+          ttl: 3600,
         }),
       }),
     }),

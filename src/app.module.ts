@@ -21,10 +21,10 @@ import { redisStore } from 'cache-manager-redis-store';
       useFactory: async () => ({
         store: await redisStore({
           socket: {
-            host: 'localhost',
+            host: '10.132.0.2',
             port: 6379,
           },
-          ttl: 60 * 5,
+          ttl: 3600,
         }),
       }),
     }),

@@ -131,142 +131,153 @@ export class FellowshipService {
     batchId: number,
   ) {
     const cacheKey = `programDetails:${regId}:${programId}:${batchId}`;
-    const ttl = 60 * 5;
+    const ttl = 60 * 60 * 12; // 12 hours
 
     try {
+      // 1️⃣ Check cache
       const cached = await this.cacheManager.get(cacheKey);
-      if (cached) {
-        return cached;
-      }
+      if (cached) return cached;
 
-      const [payment] = await this.db
-        .select({ paymentId: tblPayments.paymentId })
-        .from(tblPayments)
+      // 2️⃣ Check enrollment
+      const [enrollment] = await this.db
+        .select({ enrollmentId: tblEnrollments.enrollmentId })
+        .from(tblEnrollments)
         .where(
           and(
-            eq(tblPayments.regId, regId),
-            eq(tblPayments.programId, programId),
-            eq(tblPayments.batchId, batchId),
-            eq(tblPayments.payStatus, 'captured'),
+            eq(tblEnrollments.regId, regId),
+            eq(tblEnrollments.programId, programId),
+            eq(tblEnrollments.batchId, batchId),
+            eq(tblEnrollments.payStatus, 'captured'),
           ),
         );
 
-      if (!payment) {
+      if (!enrollment) {
         return {
           success: false,
-          message: 'User has not purchased this program or batch.',
+          message:
+            'User is not enrolled or payment not captured for this program/batch.',
         };
       }
 
-      const [batchDetails] = await this.db
-        .select({
-          modulesCount: tblBatch.modules,
-          videosCount: tblBatch.videos,
-          dicomCount: tblBatch.dicom,
-          assessmentCount: tblBatch.assessments,
-          certificateCount: tblBatch.certificates,
-          meetingCount: tblBatch.meetings,
-        })
-        .from(tblBatch)
-        .where(
-          and(eq(tblBatch.programId, programId), eq(tblBatch.batchId, batchId)),
-        );
-
-      const phases = await this.db
-        .select({
-          phaseId: tblPhases.phaseId,
-          phaseName: tblPhases.phaseName,
-          phaseDescription: tblPhases.phaseDescription,
-          phaseImage: tblPhases.phaseImage,
-          phaseStart: tblPhases.phaseStartDate,
-          phaseEnd: tblPhases.phaseEndDate,
-        })
-        .from(tblPhases)
-        .where(
-          and(
-            eq(tblPhases.programId, programId),
-            eq(tblPhases.batchId, batchId),
-          ),
-        );
-
-      const phasesWithModules: any[] = [];
-      for (const phase of phases) {
-        const modules = await this.db
-          .select({
-            moduleId: tblModules.moduleId,
-            moduleName: tblModules.moduleName,
-            moduleDescription: tblModules.moduleDescription,
-            moduleImage: tblModules.moduleImage,
-            moduleStart: tblModules.moduleStartdate,
-            module2Start: tblModules.module2Startdate,
-            module3Start: tblModules.module3Startdate,
-            programType: tblModules.programType,
-          })
-          .from(tblModules)
-          .where(
-            and(
-              eq(tblModules.programId, programId),
-              eq(tblModules.batchId, batchId),
+      // 3️⃣ Fetch batch details
+      const [batchDetails, phases] = await Promise.all([
+        await this.timedQuery(
+          this.db
+            .select({
+              modulesCount: tblBatch.modules,
+              videosCount: tblBatch.videos,
+              dicomCount: tblBatch.dicom,
+              assessmentCount: tblBatch.assessments,
+              certificateCount: tblBatch.certificates,
+              meetingCount: tblBatch.meetings,
+            })
+            .from(tblBatch)
+            .where(
+              and(
+                eq(tblBatch.programId, programId),
+                eq(tblBatch.batchId, batchId),
+              ),
             ),
-          );
-
-        phasesWithModules.push({
-          ...phase,
-          moduleCount: modules.length,
-          modules,
-        });
-      }
-
-      const crsections = await this.db
-        .select({
-          crsectionId: tblCrsections.crsectionId,
-          crsectionName: tblCrsections.crsectionName,
-          crsectionDescription: tblCrsections.crsectionDescription,
-        })
-        .from(tblCrsections)
-        .where(
-          and(
-            eq(tblCrsections.programId, programId),
-            eq(tblCrsections.batchId, batchId),
-            eq(tblCrsections.status, '1'),
-          ),
-        );
-
-      const specialFocusTracks: any[] = [];
-      for (const crs of crsections) {
-        const crSessions = await this.db
-          .select({
-            sessionId: tblSessions.sessionId,
-            sessionName: tblSessions.sessionName,
-            sessionType: tblSessions.sessionType,
-          })
-          .from(tblSessions)
-          .where(
-            and(
-              eq(tblSessions.programId, programId),
-              eq(tblSessions.batchId, batchId),
-              eq(tblSessions.crsectionId, crs.crsectionId),
+        ),
+        await this.timedQuery(
+          this.db
+            .select({
+              phaseId: tblPhases.phaseId,
+              phaseName: tblPhases.phaseName,
+            })
+            .from(tblPhases)
+            .where(
+              and(
+                eq(tblPhases.programId, programId),
+                eq(tblPhases.batchId, batchId),
+              ),
             ),
-          );
+        ),
+        // await this.timedQuery(
+        //   this.db
+        //     .select({
+        //       crsectionId: tblCrsections.crsectionId,
+        //       crsectionName: tblCrsections.crsectionName,
+        //       crsectionDescription: tblCrsections.crsectionDescription,
+        //     })
+        //     .from(tblCrsections)
+        //     .where(
+        //       and(
+        //         eq(tblCrsections.programId, programId),
+        //         eq(tblCrsections.batchId, batchId),
+        //         eq(tblCrsections.status, '1'),
+        //       ),
+        //     ),
+        // ),
+      ]);
 
-        if (crSessions.length > 0) {
-          specialFocusTracks.push({
-            trackTitle: crs.crsectionName || 'Special Focus',
-            trackDescription: crs.crsectionDescription,
-            sessions: crSessions,
-          });
-        }
-      }
+      const phasesWithModules: any[] = await Promise.all(
+        phases.map(async (phase) => {
+          const modules = await this.db
+            .select({
+              moduleId: tblModules.moduleId,
+              moduleName: tblModules.moduleName,
+              moduleDescription: tblModules.moduleDescription,
+              moduleImage: tblModules.moduleImage,
+              moduleStart: tblModules.moduleStartdate,
+              module2Start: tblModules.module2Startdate,
+              module3Start: tblModules.module3Startdate,
+              programType: tblModules.programType,
+            })
+            .from(tblModules)
+            .where(
+              and(
+                eq(tblModules.programId, programId),
+                eq(tblModules.batchId, batchId),
+              ),
+            );
+
+          return { ...phase, moduleCount: modules.length, modules };
+        }),
+      );
+
+      // // 5️⃣ Fetch CR sessions for all CR sections in parallel
+      // const specialFocusTracks: any[] = await Promise.all(
+      //   crsections.map(async (crs) => {
+      //     const crSessions = await this.db
+      //       .select({
+      //         sessionId: tblSessions.sessionId,
+      //         sessionName: tblSessions.sessionName,
+      //         sessionType: tblSessions.sessionType,
+      //       })
+      //       .from(tblSessions)
+      //       .where(
+      //         and(
+      //           eq(tblSessions.programId, programId),
+      //           eq(tblSessions.batchId, batchId),
+      //           eq(tblSessions.crsectionId, crs.crsectionId),
+      //         ),
+      //       );
+
+      //     if (crSessions.length > 0) {
+      //       return {
+      //         trackTitle: crs.crsectionName || 'Special Focus',
+      //         trackDescription: crs.crsectionDescription,
+      //         sessions: crSessions,
+      //       };
+      //     }
+
+      //     return null; // filter out later
+      //   }),
+      // );
+
+      // // Filter out null tracks
+      // const filteredTracks = specialFocusTracks.filter((t) => t !== null);
 
       const result = {
         success: true,
         counts: batchDetails ?? {},
-        trackCount: phasesWithModules.length + specialFocusTracks.length,
+        trackCount: phasesWithModules.length,
         phases: phasesWithModules,
-        specialFocus: specialFocusTracks,
+        // specialFocus: filteredTracks,
       };
 
-      await this.cacheManager.set(cacheKey, result, { ttl: 43200 } as any);
+      await this.cacheManager.set(cacheKey, result, { ttl } as any);
 
       return result;
     } catch (error) {
