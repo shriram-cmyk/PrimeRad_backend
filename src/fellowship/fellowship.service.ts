@@ -25,6 +25,8 @@ import {
 import { CreateQueryDto } from './dto/create-query-dto';
 import { CreateQueryResponseDto } from './dto/create-query-response-dto';
 import { and, eq, sql, or, gt, inArray } from 'drizzle-orm';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from '@nestjs/cache-manager';
 export class SubmitUserObservationDto {
   obsTitleId: number;
   userObs: string;
@@ -32,69 +34,78 @@ export class SubmitUserObservationDto {
 
 @Injectable()
 export class FellowshipService {
-  constructor(@Inject('DB') private readonly db: MySql2Database) {}
+  constructor(
+    @Inject('DB') private readonly db: MySql2Database,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+  ) {}
+  async timedQuery<T>(
+    queryPromise: Promise<T>,
+    label = 'DB Query',
+  ): Promise<T> {
+    const start = Date.now();
+    const result = await queryPromise;
+    const dbTime = Date.now() - start;
+    console.log(`⏱️ ${label} took ${dbTime} ms`);
+    return result;
+  }
 
   async getCapturedProgramsByUser(regId: number, page = 1, limit = 10) {
     try {
+      const cacheKey = `capturedPrograms:${regId}:${page}:${limit}`;
+
+      // Check Redis cache first
+      const cachedData = await this.cacheManager.get(cacheKey);
+      if (cachedData) {
+        console.log('Cache hit:', cacheKey);
+        return cachedData;
+      }
+
       const offset = (page - 1) * limit;
 
-      // Use Promise.all for parallel execution - this is the key optimization
-      const [programs, countResult] = await Promise.all([
-        // Main query - using ANY_VALUE() for MySQL ONLY_FULL_GROUP_BY compatibility
-        this.db
-          .select({
-            programId: tblProgram.programId,
-            programName: sql<string>`ANY_VALUE(${tblProgram.programName})`,
-            programShortname: sql<string>`ANY_VALUE(${tblProgram.programShortname})`,
-            programUrl: sql<string>`ANY_VALUE(${tblProgram.programUrl})`,
-            programTitle: sql<string>`ANY_VALUE(${tblProgram.programTitle})`,
-            programDescription: sql<string>`ANY_VALUE(${tblProgram.programDescription})`,
-            programImage: sql<string>`ANY_VALUE(CONCAT('https://primeradacademy.com/admin/support/uploads/banners/', ${tblProgram.programImage}))`,
-            programDuration: sql<string>`ANY_VALUE(${tblProgram.programDuration})`,
+      const [programs] = await Promise.all([
+        this.timedQuery(
+          this.db
+            .select({
+              programId: tblProgram.programId,
+              programName: sql<string>`ANY_VALUE(${tblProgram.programName})`,
+              programShortname: sql<string>`ANY_VALUE(${tblProgram.programShortname})`,
+              programUrl: sql<string>`ANY_VALUE(${tblProgram.programUrl})`,
+              programTitle: sql<string>`ANY_VALUE(${tblProgram.programTitle})`,
+              programDescription: sql<string>`ANY_VALUE(${tblProgram.programDescription})`,
+              programImage: sql<string>`ANY_VALUE(CONCAT('https://primeradacademy.com/admin/support/uploads/banners/', ${tblProgram.programImage}))`,
+              programDuration: sql<string>`ANY_VALUE(${tblProgram.programDuration})`,
 
-            batchId: tblBatch.batchId,
-            batchName: sql<string>`CONCAT('Batch ', ANY_VALUE(${tblBatch.batchId}))`,
-            batchStart: sql<Date>`ANY_VALUE(${tblBatch.batchStartdate})`,
-            batchEnd: sql<Date>`ANY_VALUE(${tblBatch.batchEnddate})`,
-            moduleCount: sql<number>`ANY_VALUE(${tblBatch.modules})`,
+              batchId: tblBatch.batchId,
+              batchName: sql<string>`CONCAT('Batch ', ANY_VALUE(${tblBatch.batchId}))`,
+              batchStart: sql<Date>`ANY_VALUE(${tblBatch.batchStartdate})`,
+              batchEnd: sql<Date>`ANY_VALUE(${tblBatch.batchEnddate})`,
+              moduleCount: sql<number>`ANY_VALUE(${tblBatch.modules})`,
 
-            enrolledDate: sql<Date>`MIN(${tblEnrollments.enrolledDate})`,
-            payStatus: sql<string>`MAX(${tblEnrollments.payStatus})`,
-          })
-          .from(tblEnrollments)
-          .innerJoin(
-            tblProgram,
-            eq(tblEnrollments.programId, tblProgram.programId),
-          )
-          .innerJoin(tblBatch, eq(tblEnrollments.batchId, tblBatch.batchId))
-          .where(
-            and(
-              eq(tblEnrollments.regId, regId),
-              eq(tblEnrollments.payStatus, 'captured'),
-            ),
-          )
-          .groupBy(tblEnrollments.programId, tblEnrollments.batchId)
-          .orderBy(sql`MIN(${tblEnrollments.enrolledDate})`)
-          .limit(limit)
-          .offset(offset),
-
-        // Optimized count query - much faster than your original
-        this.db
-          .select({
-            total: sql<number>`COUNT(DISTINCT CONCAT(${tblEnrollments.programId}, '-', ${tblEnrollments.batchId}))`,
-          })
-          .from(tblEnrollments)
-          .where(
-            and(
-              eq(tblEnrollments.regId, regId),
-              eq(tblEnrollments.payStatus, 'captured'),
-            ),
-          ),
+              enrolledDate: sql<Date>`MIN(${tblEnrollments.enrolledDate})`,
+              payStatus: sql<string>`MAX(${tblEnrollments.payStatus})`,
+            })
+            .from(tblEnrollments)
+            .innerJoin(
+              tblProgram,
+              eq(tblEnrollments.programId, tblProgram.programId),
+            )
+            .innerJoin(tblBatch, eq(tblEnrollments.batchId, tblBatch.batchId))
+            .where(
+              and(
+                eq(tblEnrollments.regId, regId),
+                eq(tblEnrollments.payStatus, 'captured'),
+              ),
+            )
+            .groupBy(tblEnrollments.programId, tblEnrollments.batchId)
+            .orderBy(sql`MIN(${tblEnrollments.enrolledDate})`)
+            .limit(limit)
+            .offset(offset),
+        ),
       ]);
 
-      const total = countResult[0]?.total ?? 0;
+      const total = programs.length ?? 0;
 
-      return {
+      const result = {
         success: true,
         pagination: {
           page,
@@ -104,6 +115,10 @@ export class FellowshipService {
         },
         data: programs,
       };
+
+      await this.cacheManager.set(cacheKey, result, { ttl: 43200 } as any);
+
+      return result;
     } catch (error) {
       console.error('Error fetching programs:', error);
       throw error;
@@ -115,8 +130,15 @@ export class FellowshipService {
     programId: number,
     batchId: number,
   ) {
+    const cacheKey = `programDetails:${regId}:${programId}:${batchId}`;
+    const ttl = 60 * 5;
+
     try {
-      // --- Check if user purchased
+      const cached = await this.cacheManager.get(cacheKey);
+      if (cached) {
+        return cached;
+      }
+
       const [payment] = await this.db
         .select({ paymentId: tblPayments.paymentId })
         .from(tblPayments)
@@ -136,7 +158,6 @@ export class FellowshipService {
         };
       }
 
-      // --- Get batch-level counts
       const [batchDetails] = await this.db
         .select({
           modulesCount: tblBatch.modules,
@@ -151,7 +172,6 @@ export class FellowshipService {
           and(eq(tblBatch.programId, programId), eq(tblBatch.batchId, batchId)),
         );
 
-      // --- Normal Phases + Modules
       const phases = await this.db
         .select({
           phaseId: tblPhases.phaseId,
@@ -197,7 +217,6 @@ export class FellowshipService {
         });
       }
 
-      // --- Special Focus Tracks (crsections)
       const crsections = await this.db
         .select({
           crsectionId: tblCrsections.crsectionId,
@@ -239,13 +258,17 @@ export class FellowshipService {
         }
       }
 
-      return {
+      const result = {
         success: true,
         counts: batchDetails ?? {},
         trackCount: phasesWithModules.length + specialFocusTracks.length,
         phases: phasesWithModules,
-        specialFocus: specialFocusTracks, // 👈 new field
+        specialFocus: specialFocusTracks,
       };
+
+      await this.cacheManager.set(cacheKey, result, { ttl: 43200 } as any);
+
+      return result;
     } catch (error) {
       console.error('Error fetching program details:', error);
       throw error;
