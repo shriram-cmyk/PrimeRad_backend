@@ -134,11 +134,10 @@ export class FellowshipService {
     const ttl = 60 * 60 * 12; // 12 hours
 
     try {
-      // 1️⃣ Check cache
       const cached = await this.cacheManager.get(cacheKey);
       if (cached) return cached;
 
-      // 2️⃣ Check enrollment
+      // 1️⃣ Validate enrollment
       const [enrollment] = await this.db
         .select({ enrollmentId: tblEnrollments.enrollmentId })
         .from(tblEnrollments)
@@ -159,9 +158,9 @@ export class FellowshipService {
         };
       }
 
-      // 3️⃣ Fetch batch details
+      // 2️⃣ Fetch batch + phases
       const [batchDetails, phases] = await Promise.all([
-        await this.timedQuery(
+        this.timedQuery(
           this.db
             .select({
               modulesCount: tblBatch.modules,
@@ -179,7 +178,7 @@ export class FellowshipService {
               ),
             ),
         ),
-        await this.timedQuery(
+        this.timedQuery(
           this.db
             .select({
               phaseId: tblPhases.phaseId,
@@ -193,92 +192,158 @@ export class FellowshipService {
               ),
             ),
         ),
-        // await this.timedQuery(
-        //   this.db
-        //     .select({
-        //       crsectionId: tblCrsections.crsectionId,
-        //       crsectionName: tblCrsections.crsectionName,
-        //       crsectionDescription: tblCrsections.crsectionDescription,
-        //     })
-        //     .from(tblCrsections)
-        //     .where(
-        //       and(
-        //         eq(tblCrsections.programId, programId),
-        //         eq(tblCrsections.batchId, batchId),
-        //         eq(tblCrsections.status, '1'),
-        //       ),
-        //     ),
-        // ),
       ]);
 
-      const phasesWithModules: any[] = await Promise.all(
-        phases.map(async (phase) => {
-          const modules = await this.db
-            .select({
-              moduleId: tblModules.moduleId,
-              moduleName: tblModules.moduleName,
-              moduleDescription: tblModules.moduleDescription,
-              moduleImage: tblModules.moduleImage,
-              moduleStart: tblModules.moduleStartdate,
-              module2Start: tblModules.module2Startdate,
-              module3Start: tblModules.module3Startdate,
-              programType: tblModules.programType,
-            })
-            .from(tblModules)
-            .where(
-              and(
-                eq(tblModules.programId, programId),
-                eq(tblModules.batchId, batchId),
-              ),
-            );
+      // 3️⃣ Fetch all modules (no phaseId in table)
+      const allModules = await this.db
+        .select({
+          moduleId: tblModules.moduleId,
+          moduleName: tblModules.moduleName,
+          moduleDescription: tblModules.moduleDescription,
+          moduleImage: tblModules.moduleImage,
+          moduleStart: tblModules.moduleStartdate,
+          module2Start: tblModules.module2Startdate,
+          module3Start: tblModules.module3Startdate,
+          programType: tblModules.programType,
+        })
+        .from(tblModules)
+        .where(
+          and(
+            eq(tblModules.programId, programId),
+            eq(tblModules.batchId, batchId),
+          ),
+        );
 
-          return { ...phase, moduleCount: modules.length, modules };
-        }),
-      );
+      // 4️⃣ Fetch all sessions (this links phases ↔ modules)
+      const allSessions = await this.db
+        .select({
+          sessionId: tblSessions.sessionId,
+          moduleId: tblSessions.moduleId,
+          phaseId: tblSessions.phaseId,
+        })
+        .from(tblSessions)
+        .where(
+          and(
+            eq(tblSessions.programId, programId),
+            eq(tblSessions.batchId, batchId),
+          ),
+        );
 
-      // // 5️⃣ Fetch CR sessions for all CR sections in parallel
-      // const specialFocusTracks: any[] = await Promise.all(
-      //   crsections.map(async (crs) => {
-      //     const crSessions = await this.db
-      //       .select({
-      //         sessionId: tblSessions.sessionId,
-      //         sessionName: tblSessions.sessionName,
-      //         sessionType: tblSessions.sessionType,
-      //       })
-      //       .from(tblSessions)
-      //       .where(
-      //         and(
-      //           eq(tblSessions.programId, programId),
-      //           eq(tblSessions.batchId, batchId),
-      //           eq(tblSessions.crsectionId, crs.crsectionId),
-      //         ),
-      //       );
+      const sessionIds = allSessions.map((s) => s.sessionId);
 
-      //     if (crSessions.length > 0) {
-      //       return {
-      //         trackTitle: crs.crsectionName || 'Special Focus',
-      //         trackDescription: crs.crsectionDescription,
-      //         sessions: crSessions,
-      //       };
-      //     }
+      // 5️⃣ Fetch statuses for sessions
+      const statuses =
+        sessionIds.length > 0
+          ? await this.db
+              .select({
+                sessionId: tblSessionstatus.sessionId,
+                sessionStatus: tblSessionstatus.sessionStatus,
+              })
+              .from(tblSessionstatus)
+              .where(inArray(tblSessionstatus.sessionId, sessionIds))
+          : [];
 
-      //     return null; // filter out later
-      //   }),
-      // );
+      // 6️⃣ Aggregate stats per module
+      const statsByModule: Record<number, any> = {};
+      for (const s of allSessions) {
+        const status = statuses.find(
+          (st) => st.sessionId === s.sessionId,
+        )?.sessionStatus;
 
-      // // Filter out null tracks
-      // const filteredTracks = specialFocusTracks.filter((t) => t !== null);
+        if (!statsByModule[s.moduleId as any]) {
+          statsByModule[s.moduleId as any] = {
+            total: 0,
+            completed: 0,
+            inProgress: 0,
+            notOpened: 0,
+          };
+        }
 
+        statsByModule[s.moduleId as any].total++;
+        if (status === '2') statsByModule[s.moduleId as any].completed++;
+        else if (status === '1') statsByModule[s.moduleId as any].inProgress++;
+        else statsByModule[s.moduleId as any].notOpened++;
+      }
+
+      const phasesWithModules = phases.map((phase) => {
+        // modules linked to this phase (via sessions table)
+        const phaseModuleIds = [
+          ...new Set(
+            allSessions
+              .filter((s) => s.phaseId === phase.phaseId)
+              .map((s) => s.moduleId),
+          ),
+        ];
+
+        const modulesWithStats = allModules
+          .filter((m) => phaseModuleIds.includes(m.moduleId))
+          .map((m) => {
+            const stat = statsByModule[m.moduleId] || {
+              total: 0,
+              completed: 0,
+              inProgress: 0,
+              notOpened: 0,
+            };
+            const completionPercentage =
+              stat.total > 0
+                ? Math.round((stat.completed / stat.total) * 100)
+                : 0;
+
+            return {
+              ...m,
+              totalSessions: stat.total,
+              completedSessions: stat.completed,
+              inProgressSessions: stat.inProgress,
+              notOpenedSessions: stat.notOpened,
+              completionPercentage,
+            };
+          });
+
+        // 🔑 Phase-level summary
+        const phaseSummary = modulesWithStats.reduce(
+          (acc, m) => {
+            acc.totalSessions += m.totalSessions;
+            acc.completedSessions += m.completedSessions;
+            acc.inProgressSessions += m.inProgressSessions;
+            acc.notOpenedSessions += m.notOpenedSessions;
+            return acc;
+          },
+          {
+            totalSessions: 0,
+            completedSessions: 0,
+            inProgressSessions: 0,
+            notOpenedSessions: 0,
+          },
+        );
+
+        const phaseCompletionPercentage =
+          phaseSummary.totalSessions > 0
+            ? Math.round(
+                (phaseSummary.completedSessions / phaseSummary.totalSessions) *
+                  100,
+              )
+            : 0;
+
+        return {
+          ...phase,
+          moduleCount: modulesWithStats.length,
+          summary: {
+            ...phaseSummary,
+            completionPercentage: phaseCompletionPercentage,
+          },
+          modules: modulesWithStats,
+        };
+      });
+
+      // 8️⃣ Final result
       const result = {
         success: true,
         counts: batchDetails ?? {},
         trackCount: phasesWithModules.length,
         phases: phasesWithModules,
-        // specialFocus: filteredTracks,
       };
 
       await this.cacheManager.set(cacheKey, result, { ttl } as any);
-
       return result;
     } catch (error) {
       console.error('Error fetching program details:', error);
