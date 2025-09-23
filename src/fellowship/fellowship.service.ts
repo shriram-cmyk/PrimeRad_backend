@@ -344,7 +344,7 @@ export class FellowshipService {
   }
 
   async getSessionsByModule(
-    regId: number, // Add regId parameter to identify the user
+    regId: number,
     programId: number,
     batchId: number,
     phaseId: number,
@@ -529,6 +529,7 @@ export class FellowshipService {
         sessionName: session.sessionName,
         sessionType: session.sessionType,
         sessionImage: session.sessionImage,
+        sessionId: session.sessionId,
       };
 
       if (session.sessionType === 'Live' || session.isZoom === '1') {
