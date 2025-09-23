@@ -130,71 +130,63 @@ export class FellowshipService {
     programId: number,
     batchId: number,
   ) {
-    const cacheKey = `programDetails:${regId}:${programId}:${batchId}`;
-    const ttl = 60 * 60 * 12; // 12 hours
-
     try {
-      const cached = await this.cacheManager.get(cacheKey);
-      if (cached) return cached;
-
-      // 1️⃣ Validate enrollment
-      const [enrollment] = await this.db
-        .select({ enrollmentId: tblEnrollments.enrollmentId })
-        .from(tblEnrollments)
+      // 1. Check payment status first
+      const [payment] = await this.db
+        .select({
+          paymentId: tblPayments.paymentId,
+        })
+        .from(tblPayments)
         .where(
           and(
-            eq(tblEnrollments.regId, regId),
-            eq(tblEnrollments.programId, programId),
-            eq(tblEnrollments.batchId, batchId),
-            eq(tblEnrollments.payStatus, 'captured'),
+            eq(tblPayments.regId, regId),
+            eq(tblPayments.programId, programId),
+            eq(tblPayments.batchId, batchId),
+            eq(tblPayments.payStatus, 'captured'),
           ),
         );
 
-      if (!enrollment) {
+      if (!payment) {
         return {
           success: false,
-          message:
-            'User is not enrolled or payment not captured for this program/batch.',
+          message: 'User has not purchased this program or batch.',
         };
       }
 
-      // 2️⃣ Fetch batch + phases
-      const [batchDetails, phases] = await Promise.all([
-        this.timedQuery(
-          this.db
-            .select({
-              modulesCount: tblBatch.modules,
-              videosCount: tblBatch.videos,
-              dicomCount: tblBatch.dicom,
-              assessmentCount: tblBatch.assessments,
-              certificateCount: tblBatch.certificates,
-              meetingCount: tblBatch.meetings,
-            })
-            .from(tblBatch)
-            .where(
-              and(
-                eq(tblBatch.programId, programId),
-                eq(tblBatch.batchId, batchId),
-              ),
-            ),
-        ),
-        this.timedQuery(
-          this.db
-            .select({
-              phaseId: tblPhases.phaseId,
-              phaseName: tblPhases.phaseName,
-            })
-            .from(tblPhases)
-            .where(
-              and(
-                eq(tblPhases.programId, programId),
-                eq(tblPhases.batchId, batchId),
-              ),
-            ),
-        ),
-      ]);
+      // 2. Get batch details
+      const [batchDetails] = await this.db
+        .select({
+          modulesCount: tblBatch.modules,
+          videosCount: tblBatch.videos,
+          dicomCount: tblBatch.dicom,
+          assessmentCount: tblBatch.assessments,
+          certificateCount: tblBatch.certificates,
+          meetingCount: tblBatch.meetings,
+        })
+        .from(tblBatch)
+        .where(
+          and(eq(tblBatch.programId, programId), eq(tblBatch.batchId, batchId)),
+        );
 
-      // 3️⃣ Fetch all modules (no phaseId in table)
+      // 3. Get all phases for this program and batch
+      const phases = await this.db
+        .select({
+          phaseId: tblPhases.phaseId,
+          phaseName: tblPhases.phaseName,
+          phaseDescription: tblPhases.phaseDescription,
+          phaseImage: tblPhases.phaseImage,
+          phaseStart: tblPhases.phaseStartDate,
+          phaseEnd: tblPhases.phaseEndDate,
+        })
+        .from(tblPhases)
+        .where(
+          and(
+            eq(tblPhases.programId, programId),
+            eq(tblPhases.batchId, batchId),
+          ),
+        );
+
+      // 4. Get all modules for this program and batch
       const allModules = await this.db
         .select({
           moduleId: tblModules.moduleId,
@@ -214,12 +206,14 @@ export class FellowshipService {
           ),
         );
 
-      // 4️⃣ Fetch all sessions (this links phases ↔ modules)
+      // 5. Get all sessions for this program and batch
       const allSessions = await this.db
         .select({
           sessionId: tblSessions.sessionId,
-          moduleId: tblSessions.moduleId,
           phaseId: tblSessions.phaseId,
+          moduleId: tblSessions.moduleId,
+          sessionName: tblSessions.sessionName,
+          sessionType: tblSessions.sessionType,
         })
         .from(tblSessions)
         .where(
@@ -229,10 +223,9 @@ export class FellowshipService {
           ),
         );
 
+      // 6. Get all session statuses for this user
       const sessionIds = allSessions.map((s) => s.sessionId);
-
-      // 5️⃣ Fetch statuses for sessions
-      const statuses =
+      const allSessionStatuses =
         sessionIds.length > 0
           ? await this.db
               .select({
@@ -240,111 +233,111 @@ export class FellowshipService {
                 sessionStatus: tblSessionstatus.sessionStatus,
               })
               .from(tblSessionstatus)
-              .where(inArray(tblSessionstatus.sessionId, sessionIds))
+              .where(
+                and(
+                  inArray(tblSessionstatus.sessionId, sessionIds),
+                  eq(tblSessionstatus.regId, regId), // Assuming regId is used to track user
+                ),
+              )
           : [];
 
-      // 6️⃣ Aggregate stats per module
-      const statsByModule: Record<number, any> = {};
-      for (const s of allSessions) {
-        const status = statuses.find(
-          (st) => st.sessionId === s.sessionId,
-        )?.sessionStatus;
+      // 7. Create lookup maps for better performance
+      const sessionStatusMap = new Map(
+        allSessionStatuses.map((s) => [s.sessionId, s.sessionStatus]),
+      );
 
-        if (!statsByModule[s.moduleId as any]) {
-          statsByModule[s.moduleId as any] = {
-            total: 0,
-            completed: 0,
-            inProgress: 0,
-            notOpened: 0,
-          };
-        }
-
-        statsByModule[s.moduleId as any].total++;
-        if (status === '2') statsByModule[s.moduleId as any].completed++;
-        else if (status === '1') statsByModule[s.moduleId as any].inProgress++;
-        else statsByModule[s.moduleId as any].notOpened++;
-      }
-
+      // 8. Process each phase with modules and their progress
       const phasesWithModules = phases.map((phase) => {
-        // modules linked to this phase (via sessions table)
-        const phaseModuleIds = [
-          ...new Set(
-            allSessions
-              .filter((s) => s.phaseId === phase.phaseId)
-              .map((s) => s.moduleId),
-          ),
-        ];
-
-        const modulesWithStats = allModules
-          .filter((m) => phaseModuleIds.includes(m.moduleId))
-          .map((m) => {
-            const stat = statsByModule[m.moduleId] || {
-              total: 0,
-              completed: 0,
-              inProgress: 0,
-              notOpened: 0,
-            };
-            const completionPercentage =
-              stat.total > 0
-                ? Math.round((stat.completed / stat.total) * 100)
-                : 0;
-
-            return {
-              ...m,
-              totalSessions: stat.total,
-              completedSessions: stat.completed,
-              inProgressSessions: stat.inProgress,
-              notOpenedSessions: stat.notOpened,
-              completionPercentage,
-            };
-          });
-
-        // 🔑 Phase-level summary
-        const phaseSummary = modulesWithStats.reduce(
-          (acc, m) => {
-            acc.totalSessions += m.totalSessions;
-            acc.completedSessions += m.completedSessions;
-            acc.inProgressSessions += m.inProgressSessions;
-            acc.notOpenedSessions += m.notOpenedSessions;
-            return acc;
-          },
-          {
-            totalSessions: 0,
-            completedSessions: 0,
-            inProgressSessions: 0,
-            notOpenedSessions: 0,
-          },
+        // Get sessions for this phase
+        const phaseSessions = allSessions.filter(
+          (s) => s.phaseId === phase.phaseId,
         );
 
+        // Calculate phase-level session statistics
+        const phaseTotalSessions = phaseSessions.length;
+        const phaseCompletedSessions = phaseSessions.filter(
+          (s) => sessionStatusMap.get(s.sessionId) === '2',
+        ).length;
+        const phaseInProgressSessions = phaseSessions.filter(
+          (s) => sessionStatusMap.get(s.sessionId) === '1',
+        ).length;
+        const phaseNotOpenedSessions =
+          phaseTotalSessions -
+          (phaseCompletedSessions + phaseInProgressSessions);
         const phaseCompletionPercentage =
-          phaseSummary.totalSessions > 0
-            ? Math.round(
-                (phaseSummary.completedSessions / phaseSummary.totalSessions) *
-                  100,
-              )
+          phaseTotalSessions > 0
+            ? Math.round((phaseCompletedSessions / phaseTotalSessions) * 100)
             : 0;
+
+        // Process modules for this phase
+        const modulesWithProgress = allModules.map((module) => {
+          // Get sessions for this module in this phase
+          const moduleSessions = phaseSessions.filter(
+            (s) => s.moduleId === module.moduleId,
+          );
+
+          const totalSessions = moduleSessions.length;
+          const completedSessions = moduleSessions.filter(
+            (s) => sessionStatusMap.get(s.sessionId) === '2',
+          ).length;
+          const inProgressSessions = moduleSessions.filter(
+            (s) => sessionStatusMap.get(s.sessionId) === '1',
+          ).length;
+          const notOpenedSessions =
+            totalSessions - (completedSessions + inProgressSessions);
+          const completionPercentage =
+            totalSessions > 0
+              ? Math.round((completedSessions / totalSessions) * 100)
+              : 0;
+
+          return {
+            ...module,
+            totalSessions,
+            completedSessions,
+            inProgressSessions,
+            notOpenedSessions,
+            completionPercentage,
+          };
+        });
 
         return {
           ...phase,
-          moduleCount: modulesWithStats.length,
+          moduleCount: modulesWithProgress.length,
           summary: {
-            ...phaseSummary,
+            totalSessions: phaseTotalSessions,
+            completedSessions: phaseCompletedSessions,
+            inProgressSessions: phaseInProgressSessions,
+            notOpenedSessions: phaseNotOpenedSessions,
             completionPercentage: phaseCompletionPercentage,
           },
-          modules: modulesWithStats,
+          modules: modulesWithProgress,
         };
       });
 
-      // 8️⃣ Final result
-      const result = {
+      // 9. Calculate global statistics
+      const globalTotalSessions = allSessions.length;
+      const globalCompletedSessions = allSessions.filter(
+        (s) => sessionStatusMap.get(s.sessionId) === '2',
+      ).length;
+      const globalInProgressSessions = allSessions.filter(
+        (s) => sessionStatusMap.get(s.sessionId) === '1',
+      ).length;
+      const globalNotOpenedSessions =
+        globalTotalSessions -
+        (globalCompletedSessions + globalInProgressSessions);
+
+      return {
         success: true,
-        counts: batchDetails ?? {},
+        counts: {
+          ...batchDetails,
+          totalSessions: globalTotalSessions,
+          completedSessions: globalCompletedSessions,
+          inProgressSessions: globalInProgressSessions,
+          notOpenedSessions: globalNotOpenedSessions,
+        },
         trackCount: phasesWithModules.length,
         phases: phasesWithModules,
       };
-
-      await this.cacheManager.set(cacheKey, result, { ttl } as any);
-      return result;
     } catch (error) {
       console.error('Error fetching program details:', error);
       throw error;
