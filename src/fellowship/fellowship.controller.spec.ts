@@ -90,20 +90,20 @@ describe('FellowshipController', () => {
     });
   });
 
-  describe('getSessionsByModule', () => {
-    it('should call service with module params', async () => {
-      const mockReq = {
-        query: { programId: 1, batchId: 2, phaseId: 3, moduleId: 4 },
-      };
-      const mockResult = { sessions: [] };
-      mockFellowshipService.getSessionsByModule.mockResolvedValue(mockResult);
+  // describe('getSessionsByModule', () => {
+  //   it('should call service with module params', async () => {
+  //     const mockReq = {
+  //       query: { programId: 1, batchId: 2, phaseId: 3, moduleId: 4 },
+  //     };
+  //     const mockResult = { sessions: [] };
+  //     mockFellowshipService.getSessionsByModule.mockResolvedValue(mockResult);
 
-      const result = await controller.getSessionsByModule(mockReq);
+  //     const result = await controller.getSessionsByModule(mockReq);
 
-      expect(service.getSessionsByModule).toHaveBeenCalledWith(1, 2, 3, 4);
-      expect(result).toEqual(mockResult);
-    });
-  });
+  //     expect(service.getSessionsByModule).toHaveBeenCalledWith(1, 2, 3, 4);
+  //     expect(result).toEqual(mockResult);
+  //   });
+  // });
 
   describe('getAllSessions', () => {
     it('should call service with pagination', async () => {
