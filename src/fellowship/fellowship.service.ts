@@ -206,7 +206,6 @@ export class FellowshipService {
           ),
         );
 
-      // 5. Get all sessions for this program and batch
       const allSessions = await this.db
         .select({
           sessionId: tblSessions.sessionId,
@@ -345,6 +344,7 @@ export class FellowshipService {
   }
 
   async getSessionsByModule(
+    regId: number, // Add regId parameter to identify the user
     programId: number,
     batchId: number,
     phaseId: number,
@@ -369,27 +369,39 @@ export class FellowshipService {
 
       const sessionIds = sessions.map((s) => s.sessionId);
 
-      const statuses = await this.db
-        .select({
-          sessionId: tblSessionstatus.sessionId,
-          sessionStatus: tblSessionstatus.sessionStatus,
-        })
-        .from(tblSessionstatus)
-        .where(inArray(tblSessionstatus.sessionId, sessionIds));
+      // FIX: Add regId filter to get statuses only for this user
+      const statuses =
+        sessionIds.length > 0
+          ? await this.db
+              .select({
+                sessionId: tblSessionstatus.sessionId,
+                sessionStatus: tblSessionstatus.sessionStatus,
+              })
+              .from(tblSessionstatus)
+              .where(
+                and(
+                  inArray(tblSessionstatus.sessionId, sessionIds),
+                  eq(tblSessionstatus.regId, regId), // Filter by user
+                ),
+              )
+          : [];
+
+      // Create a map for faster lookup
+      const statusMap = new Map(
+        statuses.map((s) => [s.sessionId, s.sessionStatus]),
+      );
 
       const grouped: Record<
         string,
         {
-          sessions: { name: string; status: string }[];
+          sessions: { sessionId: number; name: string; status: string }[];
           completedCount: number;
           totalCount: number;
         }
       > = {};
 
       for (const s of sessions) {
-        const status = statuses.find(
-          (st) => st.sessionId === s.sessionId,
-        )?.sessionStatus;
+        const status = statusMap.get(s.sessionId);
 
         let statusText = 'Not Opened';
         if (status === '2') statusText = 'Completed';
@@ -404,6 +416,7 @@ export class FellowshipService {
         }
 
         grouped[s.sessionType].sessions.push({
+          sessionId: s.sessionId, // Include sessionId for reference
           name: s.sessionName,
           status: statusText,
         });
@@ -415,15 +428,17 @@ export class FellowshipService {
         }
       }
 
-      const resultSessions: Record<string, { name: string; status: string }[]> =
-        {};
+      const resultSessions: Record<
+        string,
+        { sessionId: number; name: string; status: string }[]
+      > = {};
       const progress: Record<string, number> = {};
 
       for (const key of Object.keys(grouped)) {
         const g = grouped[key];
         resultSessions[key] = g.sessions;
 
-        // new completion percentage logic
+        // completion percentage logic
         const completionPercentage =
           g.totalCount > 0
             ? Math.round((g.completedCount / g.totalCount) * 100)

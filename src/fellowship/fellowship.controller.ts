@@ -298,8 +298,9 @@ export class FellowshipController {
   })
   async getSessionsByModule(@Req() req: any) {
     const { programId, batchId, phaseId, moduleId } = req.query;
-
+    const regId = req.user.reg_id;
     return this.fellowshipService.getSessionsByModule(
+      regId,
       Number(programId),
       Number(batchId),
       Number(phaseId),
