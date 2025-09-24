@@ -1064,63 +1064,79 @@ export class FellowshipService {
     });
   }
 
-  async submitUserObservations(dto: any, regId: any) {
+  async submitUserObservations(dtos: any[], regId: any) {
     try {
-      const data = {
-        obsTitleId: dto.obsTitleId ?? null,
-        regId: regId ?? null,
-        userObs: dto.userObs ?? null,
-      };
-
-      console.log('Data to insert:', data);
-
-      const titleExists = await this.db
-        .select()
-        .from(tblDicomObsTitles)
-        .where(eq(tblDicomObsTitles.obsTitleId, data.obsTitleId))
-        .limit(1);
-
-      if (titleExists.length === 0) {
-        throw new Error(
-          `ObsTitleId ${data.obsTitleId} does not exist in tblDicomObsTitles`,
-        );
+      if (!Array.isArray(dtos)) {
+        throw new Error('Expected an array of observations');
       }
 
-      const existingRecord = await this.db
-        .select()
-        .from(tblDicomUserObs)
-        .where(
-          and(
-            eq(tblDicomUserObs.obsTitleId, data.obsTitleId),
-            eq(tblDicomUserObs.regId, data.regId),
-          ),
-        )
-        .limit(1);
+      const results: any = [];
 
-      console.log(existingRecord);
+      for (const dto of dtos) {
+        const data = {
+          obsTitleId: dto.obsTitleId ?? null,
+          regId: regId ?? null,
+          userObs: dto.userObs ?? null,
+        };
 
-      if (existingRecord.length > 0) {
-        await this.db
-          .update(tblDicomUserObs)
-          .set({ userObs: data.userObs })
+        console.log('Data to insert:', data);
+
+        // 1. Validate obsTitleId exists
+        const titleExists = await this.db
+          .select()
+          .from(tblDicomObsTitles)
+          .where(eq(tblDicomObsTitles.obsTitleId, data.obsTitleId))
+          .limit(1);
+
+        if (titleExists.length === 0) {
+          results.push({
+            success: false,
+            message: `ObsTitleId ${data.obsTitleId} does not exist in tblDicomObsTitles`,
+          });
+          continue; // skip this one, move to next
+        }
+
+        // 2. Check if record already exists
+        const existingRecord = await this.db
+          .select()
+          .from(tblDicomUserObs)
           .where(
             and(
               eq(tblDicomUserObs.obsTitleId, data.obsTitleId),
               eq(tblDicomUserObs.regId, data.regId),
             ),
-          );
+          )
+          .limit(1);
 
-        return {
-          success: true,
-          message: 'User observations updated successfully',
-        };
-      } else {
-        await this.db.insert(tblDicomUserObs).values(data);
-        return {
-          success: true,
-          message: 'User observations saved successfully',
-        };
+        if (existingRecord.length > 0) {
+          await this.db
+            .update(tblDicomUserObs)
+            .set({ userObs: data.userObs })
+            .where(
+              and(
+                eq(tblDicomUserObs.obsTitleId, data.obsTitleId),
+                eq(tblDicomUserObs.regId, data.regId),
+              ),
+            );
+
+          results.push({
+            success: true,
+            message: `Updated obsTitleId ${data.obsTitleId} for regId ${data.regId}`,
+          });
+        } else {
+          await this.db.insert(tblDicomUserObs).values(data);
+
+          results.push({
+            success: true,
+            message: `Inserted obsTitleId ${data.obsTitleId} for regId ${data.regId}`,
+          });
+        }
       }
+
+      return {
+        success: true,
+        results, // array of all operation results
+      };
     } catch (error) {
       console.error('Error in submitUserObservations:', error);
       throw new Error(`Failed to save user observations: ${error.message}`);

@@ -9,6 +9,8 @@ import {
   Param,
   UseGuards,
   Query,
+  BadRequestException,
+  HttpCode,
 } from '@nestjs/common';
 import { FellowshipService } from './fellowship.service';
 import {
@@ -682,15 +684,51 @@ export class FellowshipController {
   }
 
   @Post('submit-observations')
+  @HttpCode(200)
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Submit user observations (save or final submit)' })
   @ApiResponse({
-    status: 201,
+    status: 200,
     description: 'Observations submitted successfully',
   })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
+  @ApiBody({
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          obsTitleId: { type: 'number', example: 101 },
+          userObs: {
+            type: 'string',
+            example: 'There is a mild abnormality in the left lung.',
+          },
+        },
+        required: ['obsTitleId', 'userObs'],
+      },
+      example: [
+        {
+          obsTitleId: 101,
+          userObs: 'There is a mild abnormality in the left lung.',
+        },
+        {
+          obsTitleId: 102,
+          userObs: 'The heart size appears within normal limits.',
+        },
+        {
+          obsTitleId: 103,
+          userObs: 'Signs of calcification observed near the spine.',
+        },
+      ],
+    },
+  })
   async submitUserObservations(@Body() body: any, @Request() req: any) {
     const regId = req.user.reg_id;
+
+    if (!Array.isArray(body)) {
+      throw new BadRequestException('Body must be an array of observations');
+    }
+
     return this.fellowshipService.submitUserObservations(body, regId);
   }
 
