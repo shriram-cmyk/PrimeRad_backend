@@ -71,15 +71,60 @@ export class OpenAccessService {
             status: tblPolls.status,
           })
           .from(tblPolls);
-
-        const pollIds = polls.map((p) => p.id);
       }
 
       const mergedItems = [...sessions, ...polls];
 
+      // 🔑 Add SEO metadata
+      const seoItems = mergedItems.map((item) => {
+        if (item.type === 'session') {
+          return {
+            ...item,
+            seoTitle: item.name,
+            seoDescription: item.description ?? '',
+            canonicalUrl: item.url,
+            ogImage:
+              item.image ?? 'https://primeradacademy.com/default-image.jpg',
+            jsonLd: {
+              '@context': 'https://schema.org',
+              '@type':
+                item.sessionType === 'Dicom'
+                  ? 'MedicalScholarlyArticle'
+                  : 'VideoObject',
+              name: item.name,
+              description: item.description,
+              thumbnailUrl: item.image,
+              contentUrl: item.url,
+              uploadDate: item.startDate,
+            },
+          };
+        } else if (item.type === 'poll') {
+          return {
+            ...item,
+            seoTitle: item.name,
+            seoDescription: 'Participate in this poll.',
+            canonicalUrl: `https://primeradacademy.com/poll/${item.id}`,
+            ogImage: 'https://primeradacademy.com/default-poll-image.jpg',
+            jsonLd: {
+              '@context': 'https://schema.org',
+              '@type': 'Question',
+              name: item.name,
+              suggestedAnswer:
+                item.options?.map((o) => ({
+                  '@type': 'Answer',
+                  text: o.optionText,
+                })) ?? [],
+              startDate: item.startDatetime,
+              endDate: item.endDatetime,
+            },
+          };
+        }
+        return item;
+      });
+
       return {
         success: true,
-        items: mergedItems,
+        items: seoItems,
       };
     } catch (error) {
       console.error('Error fetching open access items:', error);
@@ -134,6 +179,22 @@ export class OpenAccessService {
         ...poll,
         options: pollOptions,
         userStatus: userStatus?.pollStatus ?? '0',
+        // 🔑 SEO metadata
+        seoTitle: poll.question,
+        seoDescription: 'Participate in this poll.',
+        canonicalUrl: `https://primeradacademy.com/poll/${poll.id}`,
+        ogImage: 'https://primeradacademy.com/default-poll-image.jpg',
+        jsonLd: {
+          '@context': 'https://schema.org',
+          '@type': 'Question',
+          name: poll.question,
+          suggestedAnswer: pollOptions.map((o) => ({
+            '@type': 'Answer',
+            text: o.optionText,
+          })),
+          startDate: poll.startDatetime,
+          endDate: poll.endDatetime,
+        },
       };
     });
 

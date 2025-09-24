@@ -28,7 +28,6 @@ export class OpenAccessController {
   constructor(private readonly openaccessService: OpenAccessService) {}
 
   @Get('items')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({
     summary: 'Get open access items',
     description:
@@ -49,14 +48,13 @@ export class OpenAccessController {
     @Query('type') type?: 'Dicom' | 'Video' | 'Poll',
   ) {
     const regId = req.user?.reg_id;
-    if (!regId) {
-      throw new UnauthorizedException('User not authenticated');
-    }
+    // if (!regId) {
+    //   throw new UnauthorizedException('User not authenticated');
+    // }
     return this.openaccessService.getOpenAccessItems(regId, type);
   }
 
   @Get('poll')
-  @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiOperation({ summary: 'Get polls with options and user status' })
   @ApiQuery({ name: 'pollId', type: Number, required: false })
   @ApiResponse({
@@ -65,9 +63,9 @@ export class OpenAccessController {
   })
   async getPolls(@Req() req: any, @Query('pollId') pollId?: number) {
     const regId = req.user?.reg_id;
-    if (!regId) {
-      throw new UnauthorizedException('User not authenticated');
-    }
+    // if (!regId) {
+    //   throw new UnauthorizedException('User not authenticated');
+    // }
     return this.openaccessService.getPolls(pollId);
   }
 

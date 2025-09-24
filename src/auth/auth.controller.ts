@@ -6,6 +6,7 @@ import {
   UnauthorizedException,
   UseGuards,
   Response,
+  HttpCode,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { UsersService } from '../users/users.service';
@@ -108,6 +109,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @HttpCode(200)
   @ApiOperation({ summary: 'Refresh access token using refresh token' })
   @ApiResponse({
     status: 200,
@@ -125,7 +127,7 @@ export class AuthController {
 
     res.cookie('accessToken', accessToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true,
       sameSite: 'none',
       maxAge: 15 * 60 * 1000,
     });

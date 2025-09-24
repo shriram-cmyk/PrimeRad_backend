@@ -108,6 +108,61 @@ export class FellowshipController {
     return this.fellowshipService.getCapturedProgramsByUser(regId);
   }
 
+  @Get('all-programs')
+  @ApiOperation({
+    summary: 'Get all fellowship programs',
+    description:
+      'Fetch all fellowship programs with their associated batches. Includes SEO-friendly slugs for program and batch.',
+  })
+  @ApiOkResponse({
+    description: 'List of all programs returned successfully',
+    schema: {
+      example: {
+        success: true,
+        pagination: {
+          page: 1,
+          limit: 10,
+          total: 4,
+          totalPages: 1,
+        },
+        data: [
+          {
+            programId: 1,
+            programName: 'PrimeRad MSK MRI Radiology Fellowship',
+            programShortname: 'MSK',
+            programUrl: 'http://localhost/primeradacademy',
+            programTitle: 'PRIME MSK MRI FELLOWSHIP',
+            programDescription:
+              'The fellowship aims to bring a world class fellowship trained faculty from across the globe providing high quality and simplified education material, real life MRI cases and live discussions',
+            programImage:
+              'https://primeradacademy.com/admin/support/uploads/banners/d42d72f3966f4e47e1e22ae336d90c72.png',
+            programDuration: '6 months',
+            programSlug: 'primerad-msk-mri-radiology-fellowship',
+            batchId: 1,
+            batchName: 'Batch 1',
+            batchStart: '2025-09-01',
+            batchEnd: '2025-12-31',
+            moduleCount: 2,
+            batchSlug: 'primerad-msk-mri-radiology-fellowship-batch-1',
+          },
+        ],
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Unauthorized - Bearer token missing or invalid',
+  })
+  @ApiForbiddenResponse({
+    description: 'Forbidden - insufficient permissions',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async getAllPrograms(@Query('page') page = 1, @Query('limit') limit = 10) {
+    return this.fellowshipService.getAllPrograms(Number(page), Number(limit));
+  }
+
   @Get('captured-modules')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'user', 'faculty')

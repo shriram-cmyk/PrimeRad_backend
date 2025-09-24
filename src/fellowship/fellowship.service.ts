@@ -1,5 +1,6 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { MySql2Database } from 'drizzle-orm/mysql2';
+import slugify from 'slugify';
 import {
   tblPayments,
   tblProgram,
@@ -27,6 +28,7 @@ import { CreateQueryResponseDto } from './dto/create-query-response-dto';
 import { and, eq, sql, or, gt, inArray } from 'drizzle-orm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from '@nestjs/cache-manager';
+
 export class SubmitUserObservationDto {
   obsTitleId: number;
   userObs: string;
@@ -121,6 +123,91 @@ export class FellowshipService {
       return result;
     } catch (error) {
       console.error('Error fetching programs:', error);
+      throw error;
+    }
+  }
+
+  async getAllPrograms(page = 1, limit = 10) {
+    try {
+      const cacheKey = `allPrograms:${page}:${limit}`;
+
+      const cachedData = await this.cacheManager.get(cacheKey);
+      if (cachedData) return cachedData;
+
+      const offset = (page - 1) * limit;
+
+      const [programs] = await Promise.all([
+        this.timedQuery(
+          this.db
+            .select({
+              programId: tblProgram.programId,
+              programName: tblProgram.programName,
+              programShortname: tblProgram.programShortname,
+              programUrl: tblProgram.programUrl,
+              programTitle: tblProgram.programTitle,
+              programDescription: tblProgram.programDescription,
+              programImage: sql<string>`CONCAT('https://primeradacademy.com/admin/support/uploads/banners/', ${tblProgram.programImage})`,
+              programDuration: tblProgram.programDuration,
+              batchId: tblBatch.batchId,
+              batchName: sql<string>`CONCAT('Batch ', ${tblBatch.batchId})`,
+              batchStart: tblBatch.batchStartdate,
+              batchEnd: tblBatch.batchEnddate,
+              moduleCount: tblBatch.modules,
+            })
+            .from(tblProgram)
+            .innerJoin(tblBatch, eq(tblProgram.programId, tblBatch.programId))
+            .orderBy(tblBatch.batchStartdate)
+            .limit(limit)
+            .offset(offset),
+        ),
+      ]);
+
+      const dataWithSEO = programs.map((p) => ({
+        ...p,
+        programSlug: slugify(p.programName, { lower: true, strict: true }),
+        batchSlug: `${slugify(p.programName, { lower: true, strict: true })}-batch-${p.batchId}`,
+        seoTitle: p.programTitle,
+        seoDescription: p.programDescription,
+        canonicalUrl: `${p.programUrl}/${slugify(p.programName, { lower: true, strict: true })}/${p.batchId}`,
+        ogImage:
+          p.programImage ?? 'https://primeradacademy.com/default-image.jpg',
+        jsonLd: {
+          '@context': 'https://schema.org',
+          '@type': 'Course',
+          name: p.programTitle,
+          description: p.programDescription,
+          provider: {
+            '@type': 'Organization',
+            name: 'PrimeRad Academy',
+            sameAs: p.programUrl,
+          },
+          hasCourseInstance: {
+            '@type': 'CourseInstance',
+            courseMode: 'Full-time',
+            startDate: p.batchStart,
+            endDate: p.batchEnd,
+          },
+        },
+      }));
+
+      const total = programs.length ?? 0;
+
+      const result = {
+        success: true,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
+        data: dataWithSEO,
+      };
+
+      await this.cacheManager.set(cacheKey, result, { ttl: 43200 } as any);
+
+      return result;
+    } catch (error) {
+      console.error('Error fetching all programs:', error);
       throw error;
     }
   }
@@ -351,6 +438,13 @@ export class FellowshipService {
     moduleId: number,
   ) {
     try {
+      const cacheKey = `sessions:${regId}:${programId}:${batchId}:${phaseId}:${moduleId}`;
+
+      // 1. Try cache first
+      const cached = await this.cacheManager.get(cacheKey);
+      if (cached) {
+        return cached; // ✅ Return cached response
+      }
       const sessions = await this.db
         .select({
           sessionId: tblSessions.sessionId,
@@ -446,12 +540,16 @@ export class FellowshipService {
 
         progress[key] = completionPercentage;
       }
-
-      return {
+      const response = {
         success: true,
         sessions: resultSessions,
         progress,
       };
+
+      // 3. Store in cache for next time
+      await this.cacheManager.set(cacheKey, response, { ttl: 300 } as any); // 5 min
+
+      return response;
     } catch (error) {
       console.error('Error fetching sessions by module:', error);
       throw error;
@@ -636,6 +734,7 @@ export class FellowshipService {
 
   async getAssessmentAnswers(sessionId: number, regId: number) {
     try {
+      // Fetch answers joined with question info
       const answers = await this.db
         .select({
           questionId: tblAssessmentUseranswer.assessmentQuestionId,
@@ -662,6 +761,26 @@ export class FellowshipService {
           ),
         );
 
+      if (!answers.length) {
+        return {
+          success: true,
+          status: 'not-taken',
+          data: [],
+        };
+      }
+
+      // Get total questions count
+      const totalQuestionsCountResult = await this.db
+        .select({
+          count: sql<number>`COUNT(*)`,
+        })
+        .from(tblAssessmentQuestion)
+        .where(eq(tblAssessmentQuestion.sessionId, sessionId));
+
+      const totalQuestionsCount = Number(
+        totalQuestionsCountResult[0]?.count ?? 0,
+      );
+
       const formatted = answers.map((a) => {
         const isCorrect = a.userAnswer === a.correctAnswer;
         return {
@@ -679,19 +798,25 @@ export class FellowshipService {
         };
       });
 
-      const totalQuestions = formatted.length;
-      const correctAnswers = formatted.filter((q) => q.isCorrect).length;
+      const correctCount = formatted.filter((q) => q.isCorrect).length;
+
+      const status =
+        answers.length === totalQuestionsCount ? 'already-done' : 'partial';
 
       return {
         success: true,
+        status,
         stats: {
-          totalQuestions,
-          correctAnswers,
+          totalQuestions: totalQuestionsCount,
+          correctAnswers: correctCount,
         },
         data: formatted,
       };
     } catch (error) {
-      console.error('Error fetching assessment answers:', error);
+      console.error(
+        `Error fetching assessment answers for sessionId=${sessionId}, regId=${regId}:`,
+        error,
+      );
       throw error;
     }
   }
