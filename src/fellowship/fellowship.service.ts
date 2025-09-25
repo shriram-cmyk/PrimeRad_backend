@@ -22,6 +22,7 @@ import {
   tblDicomUserObs,
   tblCrsections,
   tblEnrollments,
+  tblProgramPrices,
 } from '../db/schema';
 import { CreateQueryDto } from './dto/create-query-dto';
 import { CreateQueryResponseDto } from './dto/create-query-response-dto';
@@ -130,65 +131,104 @@ export class FellowshipService {
   async getAllPrograms(page = 1, limit = 10) {
     try {
       const cacheKey = `allPrograms:${page}:${limit}`;
-
       const cachedData = await this.cacheManager.get(cacheKey);
       if (cachedData) return cachedData;
 
       const offset = (page - 1) * limit;
 
-      const [programs] = await Promise.all([
-        this.timedQuery(
-          this.db
-            .select({
-              programId: tblProgram.programId,
-              programName: tblProgram.programName,
-              programShortname: tblProgram.programShortname,
-              programUrl: tblProgram.programUrl,
-              programTitle: tblProgram.programTitle,
-              programDescription: tblProgram.programDescription,
-              programImage: sql<string>`CONCAT('https://primeradacademy.com/admin/support/uploads/banners/', ${tblProgram.programImage})`,
-              programDuration: tblProgram.programDuration,
-              batchId: tblBatch.batchId,
-              batchName: sql<string>`CONCAT('Batch ', ${tblBatch.batchId})`,
-              batchStart: tblBatch.batchStartdate,
-              batchEnd: tblBatch.batchEnddate,
-              moduleCount: tblBatch.modules,
-            })
-            .from(tblProgram)
-            .innerJoin(tblBatch, eq(tblProgram.programId, tblBatch.programId))
-            .orderBy(tblBatch.batchStartdate)
-            .limit(limit)
-            .offset(offset),
-        ),
-      ]);
+      // Fetch programs + batches
+      const programs = await this.timedQuery(
+        this.db
+          .select({
+            programId: tblProgram.programId,
+            programName: tblProgram.programName,
+            programShortname: tblProgram.programShortname,
+            programUrl: tblProgram.programUrl,
+            programTitle: tblProgram.programTitle,
+            programDescription: tblProgram.programDescription,
+            programImage: sql<string>`CONCAT('https://primeradacademy.com/admin/support/uploads/banners/', ${tblProgram.programImage})`,
+            programDuration: tblProgram.programDuration,
+            batchId: tblBatch.batchId,
+            batchName: sql<string>`CONCAT('Batch ', ${tblBatch.batchId})`,
+            batchStart: tblBatch.batchStartdate,
+            batchEnd: tblBatch.batchEnddate,
+            moduleCount: tblBatch.modules,
+          })
+          .from(tblProgram)
+          .innerJoin(tblBatch, eq(tblProgram.programId, tblBatch.programId))
+          .orderBy(tblBatch.batchStartdate)
+          .limit(limit)
+          .offset(offset),
+      );
 
-      const dataWithSEO = programs.map((p) => ({
-        ...p,
-        programSlug: slugify(p.programName, { lower: true, strict: true }),
-        batchSlug: `${slugify(p.programName, { lower: true, strict: true })}-batch-${p.batchId}`,
-        seoTitle: p.programTitle,
-        seoDescription: p.programDescription,
-        canonicalUrl: `${p.programUrl}/${slugify(p.programName, { lower: true, strict: true })}/${p.batchId}`,
-        ogImage:
-          p.programImage ?? 'https://primeradacademy.com/default-image.jpg',
-        jsonLd: {
-          '@context': 'https://schema.org',
-          '@type': 'Course',
-          name: p.programTitle,
-          description: p.programDescription,
-          provider: {
-            '@type': 'Organization',
-            name: 'PrimeRad Academy',
-            sameAs: p.programUrl,
+      // Extract programIds and batchIds for the next queries
+      const programIds = programs.map((p) => p.programId);
+      const batchIds = programs.map((p) => p.batchId);
+
+      const prices = await this.db
+        .select()
+        .from(tblProgramPrices)
+        .where(
+          and(
+            inArray(tblProgramPrices.programId, programIds),
+            inArray(tblProgramPrices.batchId, batchIds),
+          ),
+        );
+
+      const payments = await this.db
+        .select({
+          programId: tblPayments.programId,
+          batchId: tblPayments.batchId,
+          enrolled: sql<number>`COUNT(*)`,
+        })
+        .from(tblPayments)
+        .where(
+          and(
+            inArray(tblPayments.programId, programIds),
+            eq(tblPayments.payStatus, 'captured'),
+          ),
+        )
+        .groupBy(tblPayments.programId, tblPayments.batchId);
+      // Map programs with prices and enrolled count
+      const dataWithSEO = programs.map((p) => {
+        const programPrices = prices.filter(
+          (pr) => pr.programId === p.programId && pr.batchId === p.batchId,
+        );
+
+        const enrolledCountObj = payments.find(
+          (pay) => pay.programId === p.programId && pay.batchId === p.batchId,
+        );
+
+        return {
+          ...p,
+          prices: programPrices,
+          enrolled: enrolledCountObj?.enrolled ?? 0,
+          programSlug: slugify(p.programName, { lower: true, strict: true }),
+          batchSlug: `${slugify(p.programName, { lower: true, strict: true })}-batch-${p.batchId}`,
+          seoTitle: p.programTitle,
+          seoDescription: p.programDescription,
+          canonicalUrl: `${p.programUrl}/${slugify(p.programName, { lower: true, strict: true })}/${p.batchId}`,
+          ogImage:
+            p.programImage ?? 'https://primeradacademy.com/default-image.jpg',
+          jsonLd: {
+            '@context': 'https://schema.org',
+            '@type': 'Course',
+            name: p.programTitle,
+            description: p.programDescription,
+            provider: {
+              '@type': 'Organization',
+              name: 'PrimeRad Academy',
+              sameAs: p.programUrl,
+            },
+            hasCourseInstance: {
+              '@type': 'CourseInstance',
+              courseMode: 'Full-time',
+              startDate: p.batchStart,
+              endDate: p.batchEnd,
+            },
           },
-          hasCourseInstance: {
-            '@type': 'CourseInstance',
-            courseMode: 'Full-time',
-            startDate: p.batchStart,
-            endDate: p.batchEnd,
-          },
-        },
-      }));
+        };
+      });
 
       const total = programs.length ?? 0;
 
@@ -204,7 +244,6 @@ export class FellowshipService {
       };
 
       await this.cacheManager.set(cacheKey, result, { ttl: 43200 } as any);
-
       return result;
     } catch (error) {
       console.error('Error fetching all programs:', error);
