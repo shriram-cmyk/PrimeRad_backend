@@ -10,6 +10,7 @@ import { FellowshipModule } from './fellowship/fellowship.module';
 import { PacsAuthModule } from './pacs-dicom/pacs-dicom-auth.module';
 import { OpenAccessModule } from './open-access/open-access.module';
 import { CacheModule } from '@nestjs/cache-manager';
+import { PaymentModule } from './payment/payment.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { CacheModule } from '@nestjs/cache-manager';
     FellowshipModule,
     PacsAuthModule,
     OpenAccessModule,
+    PaymentModule,
   ],
   controllers: [AppController],
   providers: [AppService],

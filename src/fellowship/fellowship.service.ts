@@ -430,6 +430,125 @@ export class FellowshipService {
     }
   }
 
+  async getProgramSampleDetails(programId: number, batchId: number) {
+    try {
+      // 1. Get batch details
+      const [batchDetails] = await this.db
+        .select({
+          modulesCount: tblBatch.modules,
+          videosCount: tblBatch.videos,
+          dicomCount: tblBatch.dicom,
+          assessmentCount: tblBatch.assessments,
+          certificateCount: tblBatch.certificates,
+          meetingCount: tblBatch.meetings,
+        })
+        .from(tblBatch)
+        .where(
+          and(eq(tblBatch.programId, programId), eq(tblBatch.batchId, batchId)),
+        );
+
+      // 2. Get all phases
+      const phases = await this.db
+        .select({
+          phaseId: tblPhases.phaseId,
+          phaseName: tblPhases.phaseName,
+          phaseDescription: tblPhases.phaseDescription,
+          phaseImage: tblPhases.phaseImage,
+          phaseStart: tblPhases.phaseStartDate,
+          phaseEnd: tblPhases.phaseEndDate,
+        })
+        .from(tblPhases)
+        .where(
+          and(
+            eq(tblPhases.programId, programId),
+            eq(tblPhases.batchId, batchId),
+          ),
+        );
+
+      // 3. Get all modules (limit to 3)
+      const allModules = (
+        await this.db
+          .select({
+            moduleId: tblModules.moduleId,
+            moduleName: tblModules.moduleName,
+            moduleDescription: tblModules.moduleDescription,
+            moduleImage: tblModules.moduleImage,
+            moduleStart: tblModules.moduleStartdate,
+            module2Start: tblModules.module2Startdate,
+            module3Start: tblModules.module3Startdate,
+            programType: tblModules.programType,
+          })
+          .from(tblModules)
+          .where(
+            and(
+              eq(tblModules.programId, programId),
+              eq(tblModules.batchId, batchId),
+            ),
+          )
+      ).slice(0, 3);
+
+      // 4. Get all sessions
+      const allSessions = await this.db
+        .select({
+          sessionId: tblSessions.sessionId,
+          phaseId: tblSessions.phaseId,
+          moduleId: tblSessions.moduleId,
+          sessionName: tblSessions.sessionName,
+          sessionType: tblSessions.sessionType,
+        })
+        .from(tblSessions)
+        .where(
+          and(
+            eq(tblSessions.programId, programId),
+            eq(tblSessions.batchId, batchId),
+          ),
+        );
+
+      // 5. Build sample data (3 distinct sessionTypes per module)
+      const sampleModules = allModules.map((module) => {
+        const moduleSessions = allSessions.filter(
+          (s) => s.moduleId === module.moduleId,
+        );
+
+        const seenTypes = new Set<string>();
+        const distinctSessions: typeof moduleSessions = [];
+
+        for (const s of moduleSessions) {
+          if (!seenTypes.has(s.sessionType) && distinctSessions.length < 3) {
+            seenTypes.add(s.sessionType);
+            distinctSessions.push(s);
+          }
+        }
+
+        return {
+          ...module,
+          sessions: distinctSessions,
+        };
+      });
+
+      // 6. Attach sample modules to phases
+      const phasesWithModules = phases.map((phase) => {
+        return {
+          ...phase,
+          modules: sampleModules.map((m) => ({
+            ...m,
+            sessions: m.sessions.filter((s) => s.phaseId === phase.phaseId),
+          })),
+        };
+      });
+
+      return {
+        success: true,
+        counts: batchDetails,
+        trackCount: phasesWithModules.length,
+        phases: phasesWithModules,
+      };
+    } catch (error) {
+      console.error('Error fetching sample program details:', error);
+      throw error;
+    }
+  }
+
   async getSessionsByModule(
     regId: number,
     programId: number,

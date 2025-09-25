@@ -288,6 +288,153 @@ export class FellowshipController {
     );
   }
 
+  @Get('sample-modules')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'user', 'faculty')
+  @ApiOperation({
+    summary: 'Get sample Modules',
+    description:
+      'Fetch 3 demo modules with 3 different session types each (no payment condition, always sample data).',
+  })
+  @ApiOkResponse({
+    description: 'List of sample modules returned successfully',
+    schema: {
+      example: {
+        success: true,
+        counts: {
+          modulesCount: 3,
+          videosCount: 3,
+          dicomCount: 3,
+          assessmentCount: 3,
+          certificateCount: 0,
+          meetingCount: 0,
+        },
+        trackCount: 3,
+        phases: [
+          {
+            phaseId: 1,
+            phaseName: 'Track 1',
+            phaseDescription: 'Phase 1 description',
+            phaseImage: 'phase1.png',
+            phaseStart: '2024-09-01',
+            phaseEnd: '2024-10-01',
+            modules: [
+              {
+                moduleId: 1,
+                moduleName: 'Knee',
+                moduleDescription: 'Knee basics',
+                moduleImage: 'knee.png',
+                programType: '0',
+                sessions: [
+                  {
+                    sessionId: 101,
+                    sessionName: 'Knee Intro',
+                    sessionType: 'Video',
+                  },
+                  {
+                    sessionId: 102,
+                    sessionName: 'Knee Dicom',
+                    sessionType: 'Dicom',
+                  },
+                  {
+                    sessionId: 103,
+                    sessionName: 'Knee Quiz',
+                    sessionType: 'Assessment',
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            phaseId: 2,
+            phaseName: 'Track 2',
+            phaseDescription: 'Phase 2 description',
+            phaseImage: 'phase2.png',
+            phaseStart: '2024-10-01',
+            phaseEnd: '2024-10-31',
+            modules: [
+              {
+                moduleId: 2,
+                moduleName: 'Shoulder',
+                moduleDescription: 'Shoulder basics',
+                moduleImage: 'shoulder.png',
+                programType: '0',
+                sessions: [
+                  {
+                    sessionId: 201,
+                    sessionName: 'Shoulder Video',
+                    sessionType: 'Video',
+                  },
+                  {
+                    sessionId: 202,
+                    sessionName: 'Shoulder Dicom',
+                    sessionType: 'Dicom',
+                  },
+                  {
+                    sessionId: 203,
+                    sessionName: 'Shoulder Quiz',
+                    sessionType: 'Assessment',
+                  },
+                ],
+              },
+            ],
+          },
+          {
+            phaseId: 3,
+            phaseName: 'Track 3',
+            phaseDescription: 'Phase 3 description',
+            phaseImage: 'phase3.png',
+            phaseStart: '2024-11-01',
+            phaseEnd: '2024-11-30',
+            modules: [
+              {
+                moduleId: 3,
+                moduleName: 'Spine',
+                moduleDescription: 'Spine basics',
+                moduleImage: 'spine.png',
+                programType: '0',
+                sessions: [
+                  {
+                    sessionId: 301,
+                    sessionName: 'Spine Video',
+                    sessionType: 'Video',
+                  },
+                  {
+                    sessionId: 302,
+                    sessionName: 'Spine Dicom',
+                    sessionType: 'Dicom',
+                  },
+                  {
+                    sessionId: 303,
+                    sessionName: 'Spine Quiz',
+                    sessionType: 'Assessment',
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Unauthorized - Bearer token missing or invalid',
+  })
+  @ApiForbiddenResponse({
+    description: 'Forbidden - insufficient permissions',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  @ApiQuery({ name: 'programId', type: Number, description: 'Program ID' })
+  @ApiQuery({ name: 'batchId', type: Number, description: 'Batch ID' })
+  async getSamplePhasesAndModules(@Req() req: any) {
+    const programId = req.query.programId;
+    const batchId = req.query.batchId;
+    return this.fellowshipService.getProgramSampleDetails(programId, batchId);
+  }
+
   @Get('sessions-by-module')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'user', 'faculty')
