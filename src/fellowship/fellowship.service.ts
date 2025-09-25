@@ -163,7 +163,6 @@ export class FellowshipService {
       const programIds = programs.map((p) => p.programId);
       const batchIds = programs.map((p) => p.batchId);
 
-      // 2️⃣ Fetch program prices
       const prices = await this.db
         .select()
         .from(tblProgramPrices)
@@ -174,7 +173,6 @@ export class FellowshipService {
           ),
         );
 
-      // 3️⃣ Fetch user’s payments (if regId is provided)
       let userPayments: any[] = [];
       if (regId) {
         userPayments = await this.db
@@ -192,7 +190,6 @@ export class FellowshipService {
           );
       }
 
-      // 4️⃣ Fetch enrolled counts (all users, for showing popularity)
       const enrolledCounts = await this.db
         .select({
           programId: tblPayments.programId,
@@ -208,7 +205,6 @@ export class FellowshipService {
         )
         .groupBy(tblPayments.programId, tblPayments.batchId);
 
-      // 5️⃣ Map programs with prices + enrollment + user-specific status
       const dataWithSEO = programs.map((p) => {
         const programPrices = prices.filter(
           (pr) => pr.programId === p.programId && pr.batchId === p.batchId,
@@ -226,7 +222,7 @@ export class FellowshipService {
           ...p,
           prices: programPrices,
           enrolled: enrolledCountObj?.enrolled ?? 0,
-          isEnrolled: userPayment?.payStatus === 'captured', // ✅ user enrolled flag
+          isEnrolled: userPayment?.payStatus === 'captured',
           programSlug: slugify(p.programName, { lower: true, strict: true }),
           batchSlug: `${slugify(p.programName, { lower: true, strict: true })}-batch-${p.batchId}`,
           seoTitle: p.programTitle,
@@ -329,14 +325,8 @@ export class FellowshipService {
           phaseEnd: tblPhases.phaseEndDate,
         })
         .from(tblPhases)
-        .where(
-          and(
-            eq(tblPhases.programId, programId),
-            eq(tblPhases.batchId, batchId),
-          ),
-        );
+        .where(and(eq(tblPhases.programId, programId)));
 
-      // 4. Get all modules for this program and batch
       const allModules = await this.db
         .select({
           moduleId: tblModules.moduleId,
@@ -352,7 +342,7 @@ export class FellowshipService {
         .where(
           and(
             eq(tblModules.programId, programId),
-            eq(tblModules.batchId, batchId),
+            // eq(tblModules.batchId, batchId),
           ),
         );
 
