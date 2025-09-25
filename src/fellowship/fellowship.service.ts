@@ -128,15 +128,14 @@ export class FellowshipService {
     }
   }
 
-  async getAllPrograms(page = 1, limit = 10) {
+  async getAllPrograms(page = 1, limit = 10, regId?: number) {
     try {
-      const cacheKey = `allPrograms:${page}:${limit}`;
+      const cacheKey = `allPrograms:${page}:${limit}:user:${regId ?? 'guest'}`;
       const cachedData = await this.cacheManager.get(cacheKey);
       if (cachedData) return cachedData;
 
       const offset = (page - 1) * limit;
 
-      // Fetch programs + batches
       const programs = await this.timedQuery(
         this.db
           .select({
@@ -161,10 +160,10 @@ export class FellowshipService {
           .offset(offset),
       );
 
-      // Extract programIds and batchIds for the next queries
       const programIds = programs.map((p) => p.programId);
       const batchIds = programs.map((p) => p.batchId);
 
+      // 2️⃣ Fetch program prices
       const prices = await this.db
         .select()
         .from(tblProgramPrices)
@@ -175,7 +174,26 @@ export class FellowshipService {
           ),
         );
 
-      const payments = await this.db
+      // 3️⃣ Fetch user’s payments (if regId is provided)
+      let userPayments: any[] = [];
+      if (regId) {
+        userPayments = await this.db
+          .select({
+            programId: tblPayments.programId,
+            batchId: tblPayments.batchId,
+            payStatus: tblPayments.payStatus,
+          })
+          .from(tblPayments)
+          .where(
+            and(
+              inArray(tblPayments.programId, programIds),
+              eq(tblPayments.regId, regId),
+            ),
+          );
+      }
+
+      // 4️⃣ Fetch enrolled counts (all users, for showing popularity)
+      const enrolledCounts = await this.db
         .select({
           programId: tblPayments.programId,
           batchId: tblPayments.batchId,
@@ -189,20 +207,26 @@ export class FellowshipService {
           ),
         )
         .groupBy(tblPayments.programId, tblPayments.batchId);
-      // Map programs with prices and enrolled count
+
+      // 5️⃣ Map programs with prices + enrollment + user-specific status
       const dataWithSEO = programs.map((p) => {
         const programPrices = prices.filter(
           (pr) => pr.programId === p.programId && pr.batchId === p.batchId,
         );
 
-        const enrolledCountObj = payments.find(
+        const enrolledCountObj = enrolledCounts.find(
           (pay) => pay.programId === p.programId && pay.batchId === p.batchId,
+        );
+
+        const userPayment = userPayments.find(
+          (up) => up.programId === p.programId && up.batchId === p.batchId,
         );
 
         return {
           ...p,
           prices: programPrices,
           enrolled: enrolledCountObj?.enrolled ?? 0,
+          isEnrolled: userPayment?.payStatus === 'captured', // ✅ user enrolled flag
           programSlug: slugify(p.programName, { lower: true, strict: true }),
           batchSlug: `${slugify(p.programName, { lower: true, strict: true })}-batch-${p.batchId}`,
           seoTitle: p.programTitle,

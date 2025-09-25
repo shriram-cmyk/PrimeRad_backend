@@ -111,6 +111,8 @@ export class FellowshipController {
   }
 
   @Get('all-programs')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'user', 'faculty')
   @ApiOperation({
     summary: 'Get all fellowship programs',
     description:
@@ -161,8 +163,17 @@ export class FellowshipController {
     status: 500,
     description: 'Internal server error',
   })
-  async getAllPrograms(@Query('page') page = 1, @Query('limit') limit = 10) {
-    return this.fellowshipService.getAllPrograms(Number(page), Number(limit));
+  async getAllPrograms(
+    @Query('page') page = 1,
+    @Query('limit') limit = 10,
+    @Req() req: any,
+  ) {
+    const regId = req.user.reg_id;
+    return this.fellowshipService.getAllPrograms(
+      Number(page),
+      Number(limit),
+      Number(regId),
+    );
   }
 
   @Get('captured-modules')
