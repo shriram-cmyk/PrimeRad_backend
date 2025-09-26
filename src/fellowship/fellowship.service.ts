@@ -362,7 +362,6 @@ export class FellowshipService {
           ),
         );
 
-      // 6. Get all session statuses for this user
       const sessionIds = allSessions.map((s) => s.sessionId);
       const allSessionStatuses =
         sessionIds.length > 0
@@ -514,7 +513,7 @@ export class FellowshipService {
         .where(
           and(
             eq(tblPhases.programId, programId),
-            eq(tblPhases.batchId, batchId),
+            // eq(tblPhases.batchId, batchId),
           ),
         );
 
@@ -535,7 +534,7 @@ export class FellowshipService {
           .where(
             and(
               eq(tblModules.programId, programId),
-              eq(tblModules.batchId, batchId),
+              // eq(tblModules.batchId, batchId),
             ),
           )
       ).slice(0, 3);
