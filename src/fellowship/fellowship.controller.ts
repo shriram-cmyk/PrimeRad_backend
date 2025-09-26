@@ -110,6 +110,64 @@ export class FellowshipController {
     return this.fellowshipService.getCapturedProgramsByUser(regId);
   }
 
+  @Get('programs-detail')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles('admin', 'user', 'faculty')
+  @ApiOperation({
+    summary: 'Get user captured programs',
+    description:
+      'Fetch all fellowship programs where the logged-in user has completed payment with `pay_status = captured`.',
+  })
+  @ApiOkResponse({
+    description: 'List of captured programs returned successfully',
+    schema: {
+      example: {
+        success: true,
+        pagination: {
+          page: 1,
+          limit: 10,
+          total: 4,
+          totalPages: 1,
+        },
+        data: [
+          {
+            programId: 1,
+            programName: 'PrimeRad MSK MRI Radiology Fellowship',
+            programShortname: 'MSK',
+            programUrl: 'http://localhost/primeradacademy',
+            programTitle: 'PRIME MSK MRI FELLOWSHIP',
+            programDescription:
+              'The fellowship aims to bring a world class fellowship trained faculty from across the globe providing high quality and simplified education material, real life MRI cases and live discussions',
+            programImage: 'd42d72f3966f4e47e1e22ae336d90c72.png',
+            programDuration: '6 months',
+            batchId: 1,
+            batchName: 'Batch 1',
+            batchStart: '2025-09-01',
+            batchEnd: '2025-12-31',
+            enrolledDate: '2024-02-29',
+            moduleCount: 2,
+            payStatus: 'captured',
+          },
+        ],
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Unauthorized - Bearer token missing or invalid',
+  })
+  @ApiForbiddenResponse({
+    description: 'Forbidden - insufficient permissions',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async getProgramDetail(@Req() req: any) {
+    const programId = req.query.programId;
+    const batchId = req.query.batchId;
+    return this.fellowshipService.getProgramDetails(programId, batchId);
+  }
+
   @Get('all-programs')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('admin', 'user', 'faculty')

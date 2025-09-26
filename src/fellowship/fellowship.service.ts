@@ -128,6 +128,93 @@ export class FellowshipService {
     }
   }
 
+  async getProgramDetails(programId: number, batchId: number) {
+    try {
+      const cacheKey = `programDetails:${programId}:${batchId}`;
+
+      // First check cache
+      const cachedData = await this.cacheManager.get(cacheKey);
+      if (cachedData) {
+        console.log('Cache hit:', cacheKey);
+        return cachedData;
+      }
+
+      // Fetch program + batch details
+      const [program] = await this.db
+        .select({
+          programId: tblProgram.programId,
+          programName: tblProgram.programName,
+          programShortname: tblProgram.programShortname,
+          programUrl: tblProgram.programUrl,
+          programTitle: tblProgram.programTitle,
+          programDescription: tblProgram.programDescription,
+          programImage: sql<string>`CONCAT('https://primeradacademy.com/admin/support/uploads/banners/', ${tblProgram.programImage})`,
+          programDuration: tblProgram.programDuration,
+
+          batchId: tblBatch.batchId,
+          batchName: sql<string>`CONCAT('Batch ', ${tblBatch.batchId})`,
+          batchStart: tblBatch.batchStartdate,
+          batchEnd: tblBatch.batchEnddate,
+          moduleCount: tblBatch.modules,
+          // sessionCount: tblBatch.sessions,
+        })
+        .from(tblProgram)
+        .innerJoin(tblBatch, eq(tblProgram.programId, tblBatch.programId))
+        .where(
+          and(
+            eq(tblProgram.programId, programId),
+            eq(tblBatch.batchId, batchId),
+          ),
+        )
+        .limit(1);
+
+      if (!program) {
+        return {
+          success: false,
+          message: 'Program not found',
+        };
+      }
+
+      // Fetch program prices in INR for both student & consultant
+      const prices = await this.db
+        .select({
+          designation: tblProgramPrices.designation,
+          currency: tblProgramPrices.currency,
+          displayPrice: tblProgramPrices.displayPrice,
+          fullAmount: tblProgramPrices.fullAmount,
+          totalInstallmentAmount: tblProgramPrices.totalInstallmentAmount,
+          installmentPay1: tblProgramPrices.installmentPay1,
+          installmentPay2: tblProgramPrices.installmentPay2,
+          installmentPay3: tblProgramPrices.installmentPay3,
+        })
+        .from(tblProgramPrices)
+        .where(
+          and(
+            eq(tblProgramPrices.programId, programId),
+            eq(tblProgramPrices.batchId, batchId),
+            eq(tblProgramPrices.currency, 'INR'), // filter for INR
+            inArray(tblProgramPrices.designation, ['student', 'consultant']),
+          ),
+        );
+
+      const result = {
+        success: true,
+        data: {
+          ...program,
+          prices,
+        },
+      };
+
+      // Cache it for 12 hours
+      await this.cacheManager.set(cacheKey, result, { ttl: 43200 } as any);
+
+      return result;
+    } catch (error) {
+      console.error('Error fetching program details:', error);
+      throw error;
+    }
+  }
+
   async getAllPrograms(page = 1, limit = 10, regId?: number) {
     try {
       const cacheKey = `allPrograms:${page}:${limit}:user:${regId ?? 'guest'}`;
