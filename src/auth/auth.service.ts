@@ -57,6 +57,7 @@ export class AuthService {
       email: user.email,
       role: user.role,
       designation: user.designation,
+      phone: user.mobile,
     };
   }
 
