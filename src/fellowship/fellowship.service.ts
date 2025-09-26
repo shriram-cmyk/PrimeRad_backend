@@ -539,7 +539,6 @@ export class FellowshipService {
           )
       ).slice(0, 3);
 
-      // 4. Get all sessions
       const allSessions = await this.db
         .select({
           sessionId: tblSessions.sessionId,
