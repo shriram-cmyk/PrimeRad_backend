@@ -358,8 +358,8 @@ export class FellowshipController {
   }
 
   @Get('sample-modules')
-  @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin', 'user', 'faculty')
+  // @UseGuards(JwtAuthGuard, RolesGuard)
+  // @Roles('admin', 'user', 'faculty')
   @ApiOperation({
     summary: 'Get sample Modules',
     description:
