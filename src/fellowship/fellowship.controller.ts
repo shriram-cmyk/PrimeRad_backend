@@ -698,7 +698,8 @@ export class FellowshipController {
   @ApiParam({ name: 'sessionId', type: Number, description: 'Session ID' })
   async getSessionDetails(@Req() req: any) {
     const sessionId = Number(req.params.sessionId);
-    return this.fellowshipService.getSessionDetails(sessionId);
+    const regId = Number(req.user.reg_id);
+    return this.fellowshipService.getSessionDetails(sessionId, regId);
   }
 
   @Get('questions/:sessionId')

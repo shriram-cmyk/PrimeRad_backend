@@ -849,7 +849,7 @@ export class FellowshipService {
     }
   }
 
-  async getSessionDetails(sessionId: number) {
+  async getSessionDetails(sessionId: number, regId: number) {
     try {
       const [session] = await this.db
         .select({
@@ -951,9 +951,17 @@ export class FellowshipService {
           sessionStatus: tblSessionstatus.sessionStatus,
         })
         .from(tblSessionstatus)
-        .where(eq(tblSessionstatus.sessionId, sessionId))
+        .where(
+          and(
+            eq(tblSessionstatus.sessionId, sessionId),
+            eq(tblSessionstatus.regId, regId),
+          ),
+        )
+
         .limit(1)
         .then((rows) => rows[0]);
+
+      console.log(sessionStatusRecord, 'session status record');
 
       let sessionStatus = 'Not Opened';
       if (sessionStatusRecord) {
@@ -965,12 +973,18 @@ export class FellowshipService {
             sessionStatus = 'Completed';
             break;
           case '0':
+            sessionStatus = 'Not Opened';
+            break;
           default:
             sessionStatus = 'Not Opened';
             break;
         }
       }
-
+      console.log(
+        'Session Status',
+        sessionStatus,
+        sessionStatusRecord?.sessionStatus,
+      );
       return {
         success: true,
         data: {
