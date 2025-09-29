@@ -946,6 +946,31 @@ export class FellowshipService {
         .orderBy(tblSessions.sessionId)
         .limit(5);
 
+      const sessionStatusRecord = await this.db
+        .select({
+          sessionStatus: tblSessionstatus.sessionStatus,
+        })
+        .from(tblSessionstatus)
+        .where(eq(tblSessionstatus.sessionId, sessionId))
+        .limit(1)
+        .then((rows) => rows[0]);
+
+      let sessionStatus = 'Not Opened';
+      if (sessionStatusRecord) {
+        switch (sessionStatusRecord.sessionStatus) {
+          case '1':
+            sessionStatus = 'In Progress';
+            break;
+          case '2':
+            sessionStatus = 'Completed';
+            break;
+          case '0':
+          default:
+            sessionStatus = 'Not Opened';
+            break;
+        }
+      }
+
       return {
         success: true,
         data: {
@@ -953,6 +978,7 @@ export class FellowshipService {
           faculty,
           resources,
           nextSessions,
+          sessionStatus,
         },
       };
     } catch (error) {
