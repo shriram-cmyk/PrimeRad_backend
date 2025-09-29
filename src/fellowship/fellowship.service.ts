@@ -664,7 +664,6 @@ export class FellowshipService {
         };
       });
 
-      // 6. Attach sample modules to phases
       const phasesWithModules = phases.map((phase) => {
         return {
           ...phase,
@@ -1392,7 +1391,7 @@ export class FellowshipService {
 
       return {
         success: true,
-        results, // array of all operation results
+        results,
       };
     } catch (error) {
       console.error('Error in submitUserObservations:', error);
@@ -1484,5 +1483,98 @@ export class FellowshipService {
     }
 
     return session.dicomVideoUrl ?? '';
+  }
+
+  async updatePaymentAndEnrollment(
+    regId: number,
+    programId: number,
+    batchId: number,
+    paymentData: {
+      orderId: string;
+      payStatus: string;
+      finalAmount: string;
+      paymentOption: string;
+      programName: string;
+      currency: string;
+      paymentDate: string;
+    },
+  ) {
+    const trx = await this.db.transaction(async (tx: any) => {
+      try {
+        // --- Step 1: Insert into tblPayments ---
+        await tx.insert(tblPayments).values({
+          regId,
+          programId,
+          batchId,
+          paidFor: 1,
+          programName: paymentData.programName,
+          paymentOption: paymentData.paymentOption,
+          programAmount: paymentData.finalAmount,
+          currency: paymentData.currency,
+          orderId: paymentData.orderId,
+          paySession: '1',
+          redeemAmount: 0,
+          advanceAmount: 0,
+          subtotalAmount: paymentData.finalAmount,
+          taxAmount: '0',
+          finalAmount: paymentData.finalAmount,
+          accessStatus: '1',
+          paymentDate: paymentData.paymentDate,
+          payStatus: paymentData.payStatus,
+        });
+
+        // --- Step 2: Update or Insert into tblEnrollments ---
+        const [existingEnrollment] = await tx
+          .select()
+          .from(tblEnrollments)
+          .where(
+            and(
+              eq(tblEnrollments.regId, regId),
+              eq(tblEnrollments.programId, programId),
+              eq(tblEnrollments.batchId, batchId),
+            ),
+          );
+
+        if (existingEnrollment) {
+          await tx
+            .update(tblEnrollments)
+            .set({
+              payStatus: paymentData.payStatus as
+                | 'pending'
+                | 'captured'
+                | 'failed',
+              enrolledDate: paymentData.paymentDate,
+            })
+            .where(
+              and(
+                eq(tblEnrollments.regId, regId),
+                eq(tblEnrollments.programId, programId),
+                eq(tblEnrollments.batchId, batchId),
+              ),
+            );
+        } else {
+          await tx.insert(tblEnrollments).values({
+            regId,
+            programId,
+            batchId,
+            payStatus: paymentData.payStatus as
+              | 'pending'
+              | 'captured'
+              | 'failed',
+            enrolledDate: paymentData.paymentDate,
+          });
+        }
+
+        return {
+          success: true,
+          message: 'Payment and enrollment updated successfully',
+        };
+      } catch (error) {
+        console.error('Transaction failed:', error);
+        throw error;
+      }
+    });
+
+    return trx;
   }
 }

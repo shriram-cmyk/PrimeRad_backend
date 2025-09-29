@@ -357,6 +357,57 @@ export class FellowshipController {
     );
   }
 
+  @Post('capture-payment')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('admin', 'user')
+  @ApiOperation({
+    summary: 'Capture Program Payment',
+    description:
+      'Handles successful program payments by recording details in `tbl_payments` and updating `tbl_enrollments` (sets `pay_status = captured`).',
+  })
+  @ApiOkResponse({
+    description: 'Payment and enrollment updated successfully',
+    schema: {
+      example: {
+        success: true,
+        message: 'Payment and enrollment updated successfully',
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({
+    description: 'Unauthorized - Bearer token missing or invalid',
+  })
+  @ApiForbiddenResponse({
+    description: 'Forbidden - insufficient permissions',
+  })
+  @ApiResponse({
+    status: 500,
+    description: 'Internal server error',
+  })
+  async capturePayment(
+    @Req() req: any,
+    @Body()
+    body: {
+      programId: number;
+      batchId: number;
+      orderId: string;
+      payStatus: 'pending' | 'captured' | 'failed';
+      finalAmount: string;
+      paymentOption: string;
+      programName: string;
+      currency: string;
+      paymentDate: string;
+    },
+  ) {
+    const regId = req.user.reg_id;
+    return this.fellowshipService.updatePaymentAndEnrollment(
+      regId,
+      body.programId,
+      body.batchId,
+      body,
+    );
+  }
+
   @Get('sample-modules')
   // @UseGuards(JwtAuthGuard, RolesGuard)
   // @Roles('admin', 'user', 'faculty')
