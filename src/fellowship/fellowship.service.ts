@@ -1277,7 +1277,7 @@ export class FellowshipService {
           sessionType: 0,
           isZoom: '0',
           sessionStatus: status,
-          createdDate: new Date().toISOString(),
+          createdDate: new Date().toISOString().slice(0, 19).replace('T', ' '),
         });
 
         return {
