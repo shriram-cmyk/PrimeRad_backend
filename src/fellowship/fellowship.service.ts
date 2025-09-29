@@ -411,8 +411,8 @@ export class FellowshipService {
           phaseStart: tblPhases.phaseStartDate,
           phaseEnd: tblPhases.phaseEndDate,
         })
-        .from(tblPhases)
-        .where(and(eq(tblPhases.programId, programId)));
+        .from(tblPhases);
+      // .where(and(eq(tblPhases.programId, programId)));
 
       const allModules = await this.db
         .select({

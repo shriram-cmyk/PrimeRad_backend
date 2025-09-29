@@ -93,7 +93,6 @@ describe('AuthService', () => {
       verbose: jest.fn(),
     } as any;
 
-    // Set up environment variables
     process.env.JWT_SECRET = 'test-secret';
     process.env.JWT_REFRESH_SECRET = 'test-refresh-secret';
     process.env.JWT_EXPIRATION = '15m';
