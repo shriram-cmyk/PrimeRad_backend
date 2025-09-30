@@ -1044,4 +1044,27 @@ export class FellowshipController {
     const url = await this.fellowshipService.getDicomVideoUrl(id);
     return { dicomVideoUrl: url };
   }
+
+  @Get('search-similar')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiOperation({
+    summary: 'Search similar questions as user types',
+  })
+  @ApiQuery({
+    name: 'message',
+    type: String,
+    example: 'How to submit the form?',
+    description: 'Partial user question to search for similar questions',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'List of similar questions from the database',
+  })
+  async searchSimilarQuestions(
+    @Query('message') message: string,
+    @Request() req: any,
+  ) {
+    const regId = req.user.reg_id;
+    return this.fellowshipService.searchSimilarQuestions(message);
+  }
 }

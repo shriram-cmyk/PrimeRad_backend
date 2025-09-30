@@ -26,7 +26,7 @@ import {
 } from '../db/schema';
 import { CreateQueryDto } from './dto/create-query-dto';
 import { CreateQueryResponseDto } from './dto/create-query-response-dto';
-import { and, eq, sql, or, gt, inArray } from 'drizzle-orm';
+import { and, eq, sql, or, gt, inArray, like } from 'drizzle-orm';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from '@nestjs/cache-manager';
 
@@ -1211,6 +1211,23 @@ export class FellowshipService {
     };
   }
 
+  async searchSimilarQuestions(partialMessage: string) {
+    if (!partialMessage) return [];
+
+    const results = await this.db
+      .select()
+      .from(tblQueries)
+      .where(like(tblQueries.message, `%${partialMessage}%`)) // correct LIKE
+      .limit(10);
+
+    return results.map((r) => ({
+      queriesId: r.queriesId,
+      message: r.message,
+      anonymous: r.anonymous,
+      createdDate: r.createdDate,
+    }));
+  }
+
   async createQueryResponse(dto: CreateQueryResponseDto, regId: any) {
     const insertedId = await this.db
       .insert(tblQueryResponses)
@@ -1377,7 +1394,6 @@ export class FellowshipService {
 
         console.log('Data to insert:', data);
 
-        // 1. Validate obsTitleId exists
         const titleExists = await this.db
           .select()
           .from(tblDicomObsTitles)
@@ -1389,10 +1405,9 @@ export class FellowshipService {
             success: false,
             message: `ObsTitleId ${data.obsTitleId} does not exist in tblDicomObsTitles`,
           });
-          continue; // skip this one, move to next
+          continue;
         }
 
-        // 2. Check if record already exists
         const existingRecord = await this.db
           .select()
           .from(tblDicomUserObs)
